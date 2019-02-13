@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: default
+  labels:
+    pipeline: unset
+    build_number: unset
+spec:
+  # run only one single pod of the job
+  backoffLimit: 0
+  completions: 1
+  template:
+    spec:
+      # don't let the job run longer than 1 hour
+      activeDeadlineSeconds: 3600
+      restartPolicy: Never
+      initContainers:
+      - name: clone
+        image: alpine/git
+        command: [sh]
+        args:
+        - -ceux
+        - |
+          git clone $(GIT_URL) /work
+          cd /work
+          if [ $(GIT_REF) ]; then
+            git checkout $(GIT_REF)
+          fi
+          ls -l
+        env: []
+        volumeMounts:
+        - name: work
+          mountPath: /work
+      containers:
+      - name: build
+        image: alpine:3.8
+        workingDir: /work
+        command: [sh]
+        args:
+        - -ceux
+        - |
+          docker build -t $(DOCKER_REPO) .
+          for tag in $(ADDITIONAL_TAGS); do
+            docker tag $(DOCKER_REPO) ${tag}
+          done
+        env:
+        - name: DOCKER_REPO
+          value: j18e/weather-exporter
+        volumeMounts:
+        - name: work
+          mountPath: /work
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: docker-binary
+          mountPath: /usr/bin/docker
+      volumes:
+      - name: work
+        emptyDir: {}
+      - name: docker-socket
+        hostPath:
+          path: /var/run/docker.sock
+      - name: docker-binary
+        hostPath:
+          path: /usr/bin/docker
+

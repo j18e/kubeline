@@ -1,0 +1,364 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "cacheTimeout": null,
+      "colorBackground": true,
+      "colorPostfix": false,
+      "colorValue": false,
+      "colors": [
+        "rgba(237, 129, 40, 0.8)",
+        "rgb(245, 54, 54, 0.8)",
+        "rgba(50, 172, 45, 0.8)"
+      ],
+      "format": "none",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 93,
+      "interval": null,
+      "links": [
+        {
+          "dashboard": "kubeline",
+          "params": "var-pipeline=$pipeline",
+          "targetBlank": true,
+          "title": "kubeline",
+          "type": "dashboard",
+          "url": "/d/ci/kubeline"
+        }
+      ],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "minSpan": 6,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "$pipeline",
+      "prefixFontSize": "80%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "repeat": "pipeline",
+      "repeatDirection": "h",
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false
+      },
+      "tableColumn": "",
+      "targets": [
+        {
+          "expr": "clamp_max(max(\n  kube_job_status_start_time\n  * on (job_name) group_right()\n  kube_job_labels{label_pipeline=\"$pipeline\"}\n  ) by (job_name, label_pipeline)\n== on (label_pipeline) group_left()\nmax(\n  kube_job_status_start_time\n  * on (job_name) group_right() kube_job_labels\n  ) by (label_pipeline)\n, 1)\n\n* on (job_name) group_right()\n((kube_job_status_active == 1) - 1 or\n(kube_job_status_failed == 1) or\n(kube_job_status_succeeded == 1) + 1)",
+          "format": "time_series",
+          "instant": true,
+          "intervalFactor": 1,
+          "refId": "A"
+        }
+      ],
+      "thresholds": "1,2",
+      "title": "",
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "op": "=",
+          "text": "running",
+          "value": "0"
+        },
+        {
+          "op": "=",
+          "text": "failing",
+          "value": "1"
+        },
+        {
+          "op": "=",
+          "text": "passing",
+          "value": "2"
+        }
+      ],
+      "valueName": "avg"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 95,
+      "panels": [
+        {
+          "columns": [],
+          "fontSize": "100%",
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 5
+          },
+          "id": 89,
+          "links": [],
+          "minSpan": 8,
+          "pageSize": null,
+          "repeat": null,
+          "repeatDirection": "h",
+          "scopedVars": {
+            "pipeline": {
+              "selected": false,
+              "text": "mypipe",
+              "value": "mypipe"
+            }
+          },
+          "scroll": true,
+          "showHeader": true,
+          "sort": {
+            "col": 16,
+            "desc": true
+          },
+          "styles": [
+            {
+              "alias": "Build",
+              "colorMode": null,
+              "colors": [
+                "rgba(245, 54, 54, 0.9)",
+                "rgba(237, 129, 40, 0.89)",
+                "rgba(50, 172, 45, 0.97)"
+              ],
+              "dateFormat": "YYYY-MM-DD HH:mm:ss",
+              "decimals": 2,
+              "link": false,
+              "linkTargetBlank": true,
+              "linkTooltip": "",
+              "linkUrl": "https://grafana.example.com",
+              "mappingType": 1,
+              "pattern": "label_iteration",
+              "thresholds": [],
+              "type": "number",
+              "unit": "short"
+            },
+            {
+              "alias": "Started",
+              "colorMode": null,
+              "colors": [
+                "rgba(245, 54, 54, 0.9)",
+                "rgba(237, 129, 40, 0.89)",
+                "rgba(50, 172, 45, 0.97)"
+              ],
+              "dateFormat": "YYYY-MM-DD",
+              "decimals": 2,
+              "mappingType": 1,
+              "pattern": "Value #B",
+              "thresholds": [],
+              "type": "number",
+              "unit": "dateTimeFromNow"
+            },
+            {
+              "alias": "Finished",
+              "colorMode": null,
+              "colors": [
+                "rgba(245, 54, 54, 0.9)",
+                "rgba(237, 129, 40, 0.89)",
+                "rgba(50, 172, 45, 0.97)"
+              ],
+              "dateFormat": "YYYY-MM-DD HH:mm:ss",
+              "decimals": 2,
+              "link": false,
+              "mappingType": 1,
+              "pattern": "Value #C",
+              "thresholds": [
+                ""
+              ],
+              "type": "number",
+              "unit": "dateTimeFromNow"
+            },
+            {
+              "alias": "Status",
+              "colorMode": "row",
+              "colors": [
+                "rgba(237, 129, 40, 0.8)",
+                "rgb(245, 54, 54, 0.8)",
+                "rgba(50, 172, 45, 0.8)"
+              ],
+              "dateFormat": "YYYY-MM-DD HH:mm:ss",
+              "decimals": 2,
+              "mappingType": 1,
+              "pattern": "Value #D",
+              "thresholds": [
+                "1",
+                "2"
+              ],
+              "type": "string",
+              "unit": "short",
+              "valueMaps": [
+                {
+                  "text": "Active",
+                  "value": "0"
+                },
+                {
+                  "text": "Failed",
+                  "value": "1"
+                },
+                {
+                  "text": "Passed",
+                  "value": "2"
+                }
+              ]
+            },
+            {
+              "alias": "",
+              "colorMode": null,
+              "colors": [
+                "rgba(245, 54, 54, 0.9)",
+                "rgba(237, 129, 40, 0.89)",
+                "rgba(50, 172, 45, 0.97)"
+              ],
+              "decimals": 2,
+              "pattern": "/.*/",
+              "thresholds": [],
+              "type": "hidden",
+              "unit": "short"
+            }
+          ],
+          "targets": [
+            {
+              "expr": "kube_job_labels{job_name=~\"$pipeline-.*\"} + 0",
+              "format": "table",
+              "hide": false,
+              "instant": true,
+              "intervalFactor": 1,
+              "refId": "A"
+            },
+            {
+              "expr": "kube_job_status_start_time{job_name=~\"$pipeline-.*\"} * 1000",
+              "format": "table",
+              "hide": false,
+              "instant": true,
+              "intervalFactor": 1,
+              "refId": "B"
+            },
+            {
+              "expr": "(kube_job_status_completion_time{job_name=~\"$pipeline-.*\"} * 1000)",
+              "format": "table",
+              "hide": false,
+              "instant": true,
+              "intervalFactor": 1,
+              "refId": "C"
+            },
+            {
+              "expr": "(kube_job_status_active{job_name=~\"$pipeline-.*\"} == 1) - 1 or\n(kube_job_status_failed{job_name=~\"$pipeline-.*\"} == 1) or\n(kube_job_status_succeeded{job_name=~\"$pipeline-.*\"} == 1) + 1",
+              "format": "table",
+              "hide": false,
+              "instant": true,
+              "intervalFactor": 1,
+              "refId": "D"
+            }
+          ],
+          "title": "$pipeline",
+          "transform": "table",
+          "type": "table"
+        }
+      ],
+      "repeat": "pipeline",
+      "title": "$pipeline",
+      "type": "row"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 16,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "allValue": null,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": "default",
+        "definition": "label_values(kube_job_labels{label_iteration=~\".+\"}, label_pipeline)",
+        "hide": 0,
+        "includeAll": true,
+        "label": null,
+        "multi": true,
+        "name": "pipeline",
+        "options": [],
+        "query": "label_values(kube_job_labels{label_iteration=~\".+\"}, label_pipeline)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      }
+    ]
+  },
+  "time": {
+    "from": "now-5m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ],
+    "time_options": [
+      "5m",
+      "15m",
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d"
+    ]
+  },
+  "timezone": "",
+  "title": "Kubeline",
+  "uid": "ci"
+}

@@ -1,0 +1,14 @@
+##
+## check_frequency measured in seconds
+##
+check_frequency: 60
+pipelines:
+  test-1:
+    git_url: https://github.com/j18e/ci-test-1.git
+    ##
+    ## if git_branch is not specified, master is assumed
+    ##
+    # git_branch: master
+##
+## all other configuration in target repo /kubeline.yml
+##
