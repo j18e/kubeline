@@ -44,56 +44,39 @@ def put_state(args, state):
         yaml.dump(state, output, default_flow_style=False)
     return True
 
-def get_repo(path, url, branch):
-    repo = Repo.clone_from(url, path)
-    head = list(repo.iter_commits(branch, max_count=1))[0]
-    return head.hexsha
-
-def get_head(repo, branch):
-    origin = repo.remote()
-    origin.pull()
-    head = list(repo.iter_commits(branch, max_count=1))[0]
-    return head.hexsha
-
 def init(args):
     config = load_config(args)
     state = get_state(args)
     for name, pipeline in config['pipelines'].items():
         if not state.get(name):
             state[name] = {
-                'git_ref': None,
                 'iteration': 0,
                 'last_checked': datetime.fromtimestamp(0),
                 'last_run': datetime.fromtimestamp(0)
             }
-            state[name]['git_ref'] = get_ref(pipeline['git_url'],
-                                             pipeline['branch'])
     put_state(args, state)
     return config, state
 
 def check_pipeline(args, name, pipeline, state):
     msg = 'successfully triggered pipeline {} at ref {}'
-    git_ref = get_ref(pipeline['git_url'], pipeline['branch'])
-    if git_ref == state['git_ref']:
-        return None
-    resp = Build(args, name, pipeline, iteration=state['iteration']+1,
-                 git_ref=git_ref)
+    if not state.get(path):
+        path = args['--repo-dir'] + name
+    path = state['path']
+    url = pipeline['git_url']
+    branch = pipeline['branch']
+    git_commit, config = Get_repo(path, url, branch)
+    if not state.get('git_commit'):
+        state['git_commit'] = git_commit
+        return state
+    elif git_commit != state['git_commit']:
+        resp = Build(args, name, pipeline, iteration=state['iteration']+1,
+                     git_commit=git_commit)
     if resp:
-        print(msg.format(name, git_ref[:6]))
+        print(msg.format(name, git_commit[:6]))
         state['iteration'] += 1
-        state['git_ref'] = git_ref
+        state['git_commit'] = git_commit
         state['last_run'] = resp
         return state
-
-def get_repo(path, url, branch):
-    if not os.path.exists(path):
-        clone = ['git', 'clone', url, path]
-        get_hash = ['git', 'rev-parse', branch]
-        p = Popen(clone, cwd=work_dir)
-        p.wait()
-        with open(path + '/kubeline.yml', 'r') as stream:
-            pipeline_config = yaml.load(stream.read())
-    return commit_hash, pipeline_config
 
 def main(args):
     if args['dev']:
@@ -105,7 +88,7 @@ def main(args):
         print('only dev mode currently available')
         exit()
 
-    config, repos, state = init(args)
+    config, state = init(args)
     check_frequency = timedelta(seconds=60)
 
     while True:
@@ -114,12 +97,12 @@ def main(args):
             if datetime.now() - state[name]['last_checked'] < check_frequency:
                 continue
             print('checking', name)
-            pipeline_state = check_pipeline(args, name,
-                                            pipeline, state[name])
+            pipeline_state = check_pipeline(args, name, pipeline, state[name])
             state[name]['last_checked'] = datetime.now()
-            if pipeline_state:
-                state[name] = pipeline_state
+            pipeline_state['last_checked'] = datetime.now()
+            state[name] = pipeline_state
             put_state(args, state)
+
         sleep(5)
 
 
