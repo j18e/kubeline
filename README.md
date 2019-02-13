@@ -1,6 +1,8 @@
 # Kubeline
 A Kubernetes native CI tool
 
+![Dashboard](dev/dashboard.png)
+
 ## Components
 - Custom built scheduler to run jobs
 - Utilizes Kubernetes jobs to run builds
