@@ -1,0 +1,29 @@
+groups:
+- name: kubeline
+  rules:
+  - record: job:kubeline_pipeline_status
+    expr: |
+      clamp_max(
+        max(
+          kube_job_status_start_time
+          * on (job_name) group_right() kube_job_labels{label_pipeline=~".+"}
+        ) by (job_name, label_pipeline)
+        == on (label_pipeline) group_left()
+        max(
+          kube_job_status_start_time
+          * on (job_name) group_right() kube_job_labels
+        ) by (label_pipeline)
+      , 1
+      )
+      * on (job_name) group_right() (
+        (kube_job_status_active == 1) - 1 or
+        (kube_job_status_failed == 1) or
+        (kube_job_status_succeeded == 1) + 1
+      )
+  - record: job:kubeline_job_status
+    expr: |
+      (
+        (kube_job_status_active{job_name=~".+"} == 1) - 1 or
+        (kube_job_status_failed{job_name=~".+"} == 1) + 0 or
+        (kube_job_status_succeeded{job_name=~".+"} == 1) + 1
+      ) * on (job_name) group_right() kube_job_labels

@@ -80,7 +80,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "clamp_max(max(\n  kube_job_status_start_time\n  * on (job_name) group_right()\n  kube_job_labels{label_pipeline=\"$pipeline\"}\n  ) by (job_name, label_pipeline)\n== on (label_pipeline) group_left()\nmax(\n  kube_job_status_start_time\n  * on (job_name) group_right() kube_job_labels\n  ) by (label_pipeline)\n, 1)\n\n* on (job_name) group_right()\n((kube_job_status_active == 1) - 1 or\n(kube_job_status_failed == 1) or\n(kube_job_status_succeeded == 1) + 1)",
+          "expr": "job:kubeline_pipeline_status{job_name=~\"$pipeline-.*\"}",
           "format": "time_series",
           "instant": true,
           "intervalFactor": 1,
@@ -215,7 +215,7 @@
               "dateFormat": "YYYY-MM-DD HH:mm:ss",
               "decimals": 2,
               "mappingType": 1,
-              "pattern": "Value #D",
+              "pattern": "Value #A",
               "thresholds": [
                 "1",
                 "2"
@@ -254,7 +254,7 @@
           ],
           "targets": [
             {
-              "expr": "kube_job_labels{job_name=~\"$pipeline-.*\"} + 0",
+              "expr": "job:kubeline_job_status{job_name=~\"$pipeline-.*\"} + 0",
               "format": "table",
               "hide": false,
               "instant": true,
@@ -276,14 +276,6 @@
               "instant": true,
               "intervalFactor": 1,
               "refId": "C"
-            },
-            {
-              "expr": "(kube_job_status_active{job_name=~\"$pipeline-.*\"} == 1) - 1 or\n(kube_job_status_failed{job_name=~\"$pipeline-.*\"} == 1) or\n(kube_job_status_succeeded{job_name=~\"$pipeline-.*\"} == 1) + 1",
-              "format": "table",
-              "hide": false,
-              "instant": true,
-              "intervalFactor": 1,
-              "refId": "D"
             }
           ],
           "title": "$pipeline",
