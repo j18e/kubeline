@@ -6,18 +6,21 @@ Usage:
   main.py [options] dev
 
 Options:
-  -f                      specify config file [default: config.yml]
-  -s                      specify state file  [default: state.yml]
+  -f <file>               specify config file [default: config.yml]
+  -s <file>               specify state file  [default: state.yml]
   -h --help               show this help text
 
 """
 
 from datetime import datetime, timedelta
 from docopt import docopt
+from git_funcs import get_pipeline_config
 from k8s import Build
 from os import environ
+from prometheus_client import start_http_server, Gauge
 from time import sleep
 import git
+import sys
 import yaml
 
 def load_config(args):
@@ -32,6 +35,8 @@ def get_state(args):
     try:
         with open(args['-s'], 'r') as stream:
             state = yaml.load(stream.read())
+        if state is None:
+            state = {}
         print('loading state from {}...'.format(args['-s']))
     except FileNotFoundError:
         print('state file not at {}. Starting with empty state...'.format(
@@ -58,38 +63,51 @@ def init(args):
     return config, state
 
 def check_pipeline(args, name, pipeline, state):
-    msg = 'successfully triggered pipeline {} at ref {}'
-    if not state.get(path):
-        path = args['--repo-dir'] + name
-    path = state['path']
     url = pipeline['git_url']
     branch = pipeline['branch']
-    git_commit, config = Get_repo(path, url, branch)
-    if not state.get('git_commit'):
-        state['git_commit'] = git_commit
+    pipeline_config, commit_sha = get_pipeline_config(url, branch)
+    if not commit_sha:
+        state['config_healthy'] = False
         return state
-    elif git_commit != state['git_commit']:
-        resp = Build(args, name, pipeline, iteration=state['iteration']+1,
-                     git_commit=git_commit)
-    if resp:
-        print(msg.format(name, git_commit[:6]))
-        state['iteration'] += 1
-        state['git_commit'] = git_commit
-        state['last_run'] = resp
+    if not pipeline_config:
+        state['config_healthy'] = False
+        state['commit_sha'] = commit_sha
         return state
+    state['config_healthy'] = True
+    if not state.get('commit_sha'):
+        state['commit_sha'] = commit_sha
+        return state
+    if commit_sha != state['commit_sha']:
+        resp = Build(name, url, pipeline_config, commit_sha,
+                     iteration=state['iteration']+1)
+        if resp:
+            msg = 'successfully triggered pipeline {} at ref {}'
+            print(msg.format(name, commit_sha[:6]))
+            state['iteration'] += 1
+            state['commit_sha'] = commit_sha
+            state['last_run'] = resp
+    return state
 
 def main(args):
     if args['dev']:
-        msg = 'dev mode - using {} and {} for state and config'
-        args['-f'] = './dev/config.yml'
-        args['-s'] = './tmp/state.yml'
-        print(msg.format(args['-f'], args['-s']))
+        pass
     else:
         print('only dev mode currently available')
         exit()
 
     config, state = init(args)
-    check_frequency = timedelta(seconds=60)
+    check_frequency = timedelta(seconds=config['check_frequency'])
+    msg = 'starting watcher with check frequency of {} seconds'
+    print(msg.format(config['check_frequency']))
+
+    metric_pipeline_config = Gauge(
+        'kubeline_pipeline_config_healthy',
+        'Whether a valid config was successfully fetched from a configured \
+pipeline\'s remote and branch',
+        ['pipeline']
+
+    )
+    start_http_server(8080)
 
     while True:
         for name, pipeline in config['pipelines'].items():
@@ -100,11 +118,13 @@ def main(args):
             pipeline_state = check_pipeline(args, name, pipeline, state[name])
             state[name]['last_checked'] = datetime.now()
             pipeline_state['last_checked'] = datetime.now()
-            state[name] = pipeline_state
+            if pipeline_state['config_healthy']:
+                metric_pipeline_config.labels(name).set(1)
+            else:
+                metric_pipeline_config.labels(name).set(0)
             put_state(args, state)
 
         sleep(5)
-
 
 if __name__ == '__main__':
     main(docopt(__doc__))

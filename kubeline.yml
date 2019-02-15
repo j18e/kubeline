@@ -1,0 +1,8 @@
+stages:
+- name: build
+  type: docker-build
+- name: push
+  type: docker-push
+  repo: j18e/kubeline
+  additional_tags:
+  - $KUBELINE_COMMIT_SHA_SHORT
