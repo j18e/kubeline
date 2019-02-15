@@ -34,10 +34,13 @@ def Build(name, git_url, pipeline_config, commit_sha, iteration=0):
 def trigger_build(body):
     if path.isfile(environ['HOME'] + '/.kube/config'):
         config.load_kube_config()
+        namespace = 'default'
     else:
         config.load_incluster_config()
+        namespace = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
+        with open(namespace_file, 'r') as stream:
+            namespace = stream.read()
     batch = client.BatchV1Api()
-    namespace = 'default'
     resp = batch.create_namespaced_job(namespace, body)
     return resp
 
