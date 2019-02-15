@@ -89,12 +89,6 @@ def check_pipeline(args, name, pipeline, state):
     return state
 
 def main(args):
-    if args['dev']:
-        pass
-    else:
-        print('only dev mode currently available')
-        exit()
-
     config, state = init(args)
     check_frequency = timedelta(seconds=config['check_frequency'])
     msg = 'starting watcher with check frequency of {} seconds'
