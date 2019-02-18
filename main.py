@@ -3,7 +3,7 @@
 """
 Usage:
   main.py [options]
-  main.py [options] dev
+  main.py [options]
 
 Options:
   -f <file>               specify config file [default: config.yml]
@@ -78,14 +78,28 @@ def check_pipeline(args, name, pipeline, state):
         state['commit_sha'] = commit_sha
         return state
     if commit_sha != state['commit_sha']:
-        resp = Build(name, url, pipeline_config, commit_sha,
-                     iteration=state['iteration']+1)
+        msg = 'triggering {} at {} on {}...'
+        print(msg.format(name, commit_sha, branch))
+        build_spec = {
+            'pipeline_name': name,
+            'stages': pipeline_config['stages'],
+            'iteration': state['iteration']+1,
+            'git': {
+                'url': pipeline['git_url'],
+                'branch': pipeline['branch'],
+                'commit_sha': commit_sha,
+            },
+        }
+        resp = Build(build_spec)
         if resp:
             msg = 'successfully triggered pipeline {} at ref {}'
             print(msg.format(name, commit_sha[:6]))
             state['iteration'] += 1
             state['commit_sha'] = commit_sha
             state['last_run'] = resp
+    return state
+
+def trigger_build():
     return state
 
 def main(args):

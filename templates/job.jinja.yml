@@ -1,0 +1,119 @@
+{%- set docker_image = 'kubeline-{}:{}'.format(pipeline_name, git.commit_sha[:6]) %}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: "{{ pipeline_name }}-"
+  labels:
+    app: kubeline
+    pipeline: "{{ pipeline_name }}"
+    iteration: "{{ iteration }}"
+    git-commit: "{{ git.commit_sha[:6] }}"
+    git-branch: "{{ git.branch }}"
+spec:
+  # run only one single pod of the job
+  backoffLimit: 0
+  completions: 1
+  metadata:
+    labels:
+      app: kubeline
+      pipeline: "{{ pipeline_name }}"
+      iteration: "{{ iteration }}"
+      git-commit: "{{ git.commit_sha[:6] }}"
+      git-branch: "{{ git.branch }}"
+  template:
+    spec:
+      # don't let the job run longer than 1 hour
+      activeDeadlineSeconds: 3600
+      restartPolicy: Never
+      initContainers:
+      - name: clone
+        image: alpine/git
+        workingDir: /work
+        command: [sh]
+        args:
+        - -ceux
+        - |
+          git clone {{ git.url }} /work
+          git checkout {{ git.commit_sha }}
+          touch /stage-status/STAGE_0_COMPLETE
+        volumeMounts:
+        - name: work
+          mountPath: /work
+        - name: status
+          mountPath: /stage-status
+      containers:
+      {%- for stage in stages %}
+      - name: {{ stage.name }}
+        image: alpine:3.9
+        workingDir: /work
+        command: [sh]
+        args:
+        - -ceu
+        - |
+          echo "waiting for completion of stage $((KUBELINE_STAGE_NUMBER-1))..."
+          until [ -f "/stage-status/STAGE_$((KUBELINE_STAGE_NUMBER-1))_COMPLETE" ]; do
+              sleep 1
+          done
+          echo "starting"
+
+          set -x
+          {% if stage.type == 'docker-build' %}
+          docker build -t {{ docker_image }} .
+          {% elif stage.type == 'docker-push' %}
+          {% for tag in stage.tags %}
+          docker tag {{ docker_image }} "{{ stage.repo }}:{{ tag }}"
+          docker push "{{ stage.repo }}:{{ tag }}"
+          {%- endfor %}
+          {%- endif %}
+          set +x
+          echo "finished"
+          touch /stage-status/STAGE_$(KUBELINE_STAGE_NUMBER)_COMPLETE
+        env:
+        - name: KUBELINE_STAGE_NAME
+          value: "{{ stage.name }}"
+        - name: KUBELINE_STAGE_NUMBER
+          value: "{{ loop.index }}"
+        - name: KUBELINE_ITERATION
+          value: "{{ iteration }}"
+        - name: KUBELINE_GIT_URL
+          value: "{{ git.url }}"
+        - name: KUBELINE_GIT_BRANCH
+          value: "{{ git.branch }}"
+        - name: KUBELINE_GIT_COMMIT
+          value: "{{ git.commit_sha }}"
+        - name: KUBELINE_GIT_COMMIT_SHORT
+          value: "{{ git.commit_sha[:6] }}"
+        - name: KUBELINE_DOCKER_IMAGE
+          value: "{{ docker_image }}"
+        volumeMounts:
+        - name: work
+          mountPath: /work
+        - name: status
+          mountPath: /stage-status
+        {%- if stage.type == 'docker-build' or 'docker-push' %}
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: docker-binary
+          mountPath: /usr/bin/docker
+        {%- if stage.type == 'docker-push' %}
+        - name: docker-creds
+          mountPath: /root/.docker/config.json
+          subPath: .dockerconfigjson
+        {%- endif %}
+        {%- endif %}
+      {%- endfor %}
+      volumes:
+      - name: work
+        emptyDir: {}
+      - name: status
+        emptyDir: {}
+      - name: docker-socket
+        hostPath:
+          path: /var/run/docker.sock
+      - name: docker-binary
+        hostPath:
+          path: /usr/bin/docker
+      - name: docker-creds
+        secret:
+          secretName: kubeline-docker-creds
+

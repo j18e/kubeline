@@ -3,6 +3,9 @@ stages:
   type: docker-build
 - name: push
   type: docker-push
+  # repo may not contain tags
   repo: j18e/kubeline
-  additional_tags:
+  tags:
+  - latest
+  - $BRANCH-$KUBELINE_ITERATION
   - $KUBELINE_COMMIT_SHA_SHORT

@@ -2,7 +2,7 @@ version: '3'
 services:
   kubeline:
     build: ../
-    command: dev -f /config.yml -s ./tmp/state.yml
+    command: -f /config.yml -s ./tmp/state.yml
     volumes:
     - ./config.yml:/config.yml:ro
     - ../tmp:/work/tmp
