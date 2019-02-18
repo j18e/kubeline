@@ -22,7 +22,7 @@ def trigger_build(body):
         namespace = 'default'
     else:
         config.load_incluster_config()
-        namespace = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
+        namespace_file = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
         with open(namespace_file, 'r') as stream:
             namespace = stream.read()
     batch = client.BatchV1Api()
