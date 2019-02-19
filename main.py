@@ -3,10 +3,8 @@
 """
 Usage:
   main.py [options] --config-file=<file> --state-file=<file>
-  main.py [options] --kubernetes --configmap=<name> --state-file=<file>
 
 Options:
-  --kubernetes                      run in Kubernetes mode
   --configmap=<name>                configmap from which to load config
   --config-file=<file>              config file to use [default: config.yml]
   --state-file=<file>               state file to use [default: state.yml]
@@ -31,15 +29,12 @@ noalias_dumper = yaml.dumper.SafeDumper
 noalias_dumper.ignore_aliases = lambda self, data: True
 
 def load_config(args):
-    if args['--kubernetes']:
-        config = get_configmap_data(args['--configmap'])
-    else:
-        with open(args['--config-file'], 'r') as stream:
-            config = yaml.load(stream.read())
-        for name, pipeline in config['pipelines'].items():
-            if not pipeline.get('branch'):
-                pipeline['branch'] = 'master'
-    return config, now()
+    with open(args['--config-file'], 'r') as stream:
+        config = yaml.load(stream.read())
+    for name, pipeline in config['pipelines'].items():
+        if not pipeline.get('branch'):
+            pipeline['branch'] = 'master'
+    return config
 
 def put_state(args, state):
     with open(args['--state-file'], 'w') as output:
@@ -130,7 +125,7 @@ def init_metrics(pipelines, state, metrics=None):
     return metrics
 
 def main(args):
-    config, config_load_time = load_config(args)
+    config = load_config(args)
     check_frequency = config['check_frequency']
 
     state = init_state(args, config)
@@ -145,7 +140,7 @@ def main(args):
     last_check = 0
     while True:
         if now() - last_check > check_frequency:
-            new_config, config_load_time = load_config(args)
+            new_config = load_config(args)
             if new_config != config:
                 print('loading new config...')
                 config = new_config

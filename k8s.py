@@ -43,12 +43,6 @@ def validate_spec(spec):
                 return False
     return True
 
-def get_configmap_data(name):
-    load_config()
-    core = client.CoreV1Api()
-    resp = core.read_namespaced_config_map(name, get_namespace())
-    return resp.data
-
 def get_namespace():
     namespace = 'default'
     file_path = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
