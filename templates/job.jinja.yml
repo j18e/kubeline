@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: "{{ pipeline_name }}-"
+  generateName: "build-{{ pipeline_name }}-"
   labels:
     app: kubeline
     pipeline: "{{ pipeline_name }}"
