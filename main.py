@@ -126,7 +126,6 @@ def init_metrics(pipelines, state, metrics=None):
 
 def main(args):
     config = load_config(args)
-    check_frequency = config['check_frequency']
 
     state = init_state(args, config)
     put_state(args, state)
@@ -139,7 +138,7 @@ def main(args):
 
     last_check = 0
     while True:
-        if now() - last_check > check_frequency:
+        if now() - last_check > config['check_frequency']:
             new_config = load_config(args)
             if new_config != config:
                 print('loading new config...')
