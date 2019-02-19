@@ -15,9 +15,9 @@ def get_commit_sha(url, branch):
         msg = 'ERROR fetching most recent commit sha for {} on branch {}'
         print(msg.format(url, branch))
         print(e)
-        return False
+        return None
     if len(refs) != 1:
-        return False
+        return None
     return refs[0]
 
 def clone_commit(url, commit_sha):
@@ -34,28 +34,18 @@ def clone_commit(url, commit_sha):
         return False
     return path
 
-def check_pipeline_config(config):
-    return True
-
-def get_pipeline_config(url, branch):
-    commit_sha = get_commit_sha(url, branch)
-    if not commit_sha:
-        return False, False
+def get_pipeline_config(url, commit_sha):
     path = clone_commit(url, commit_sha)
+    full_path = path + '/kubeline.yml'
     if not path:
-        return False, False
-    config_file = 'kubeline.yml'
-    full_path = path + '/' + config_file
+        return False
     if not os.path.isfile(full_path):
-        msg = 'ERROR {} not found in {} on branch {}'
-        print(msg.format(config_file, url, branch))
+        msg = 'ERROR {} not found in {} at {}'
+        print(msg.format(full_path.split('/')[-1], url, commit_sha))
         rmtree(path)
-        return False, commit_sha
+        return False
     with open(full_path, 'r') as stream:
         config = load(stream.read())
-    if not check_pipeline_config(config):
-        rmtree(path)
-        return False, commit_sha
     rmtree(path)
-    return config, commit_sha
+    return config
 

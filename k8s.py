@@ -14,19 +14,12 @@ def Build(build_spec):
     body = template.render(build_spec)
     body = yaml.load(body)
     resp = trigger_build(body)
-    return resp.metadata.creation_timestamp
+    return resp
 
 def trigger_build(body):
-    if path.isfile(environ['HOME'] + '/.kube/config'):
-        config.load_kube_config()
-        namespace = 'default'
-    else:
-        config.load_incluster_config()
-        namespace_file = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
-        with open(namespace_file, 'r') as stream:
-            namespace = stream.read()
+    load_config()
     batch = client.BatchV1Api()
-    resp = batch.create_namespaced_job(namespace, body)
+    resp = batch.create_namespaced_job(get_namespace(), body)
     return resp
 
 def validate_spec(spec):
@@ -49,4 +42,24 @@ def validate_spec(spec):
                 print(msg + 'docker push stage must contain list of tags')
                 return False
     return True
+
+def get_configmap_data(name):
+    load_config()
+    core = client.CoreV1Api()
+    resp = core.read_namespaced_config_map(name, get_namespace())
+    return resp.data
+
+def get_namespace():
+    namespace = 'default'
+    file_path = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
+    if path.isfile(file_path):
+        with open(file_path, 'r') as stream:
+            namespace = stream.read()
+    return namespace
+
+def load_config():
+    if path.isfile(environ['HOME'] + '/.kube/config'):
+        config.load_kube_config()
+    else:
+        config.load_incluster_config()
 
