@@ -15,7 +15,7 @@ Options:
 from datetime import datetime, timedelta
 from docopt import docopt
 from git_funcs import get_pipeline_config, get_commit_sha
-from k8s import Build, get_configmap_data
+from k8s import Build
 from os import environ
 from prometheus_client import start_http_server, Gauge
 from time import sleep
@@ -49,7 +49,7 @@ def check_pipeline(name, config, pipeline_state):
     pipeline_state['check_error'] = False
     if commit_sha == pipeline_state['commit_sha']:
         return pipeline_state
-    pipeline_state['commit_sha'] == commit_sha
+    pipeline_state['commit_sha'] = commit_sha
     pipeline = get_pipeline_config(config['git_url'], commit_sha)
     if not pipeline:
         pipeline_state['config_error'] = True
@@ -72,6 +72,7 @@ def check_pipeline(name, config, pipeline_state):
     print(msg.format(name, commit_sha[:6]))
     pipeline_state['iteration'] += 1
     pipeline_state['last_run'] = resp.metadata.creation_timestamp.timestamp()
+    print('in check_pipeline:', pipeline_state['commit_sha'])
     return pipeline_state
 
 def init_state(args, config):
