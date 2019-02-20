@@ -14,8 +14,8 @@ Options:
 
 from datetime import datetime, timedelta
 from docopt import docopt
-from git_funcs import get_pipeline_config, get_commit_sha
-from k8s import Build
+from git_funcs import get_kubeline_yaml, get_commit_sha
+from k8s import Build, check_secret
 from os import environ
 from prometheus_client import start_http_server, Gauge
 from time import sleep
@@ -41,38 +41,38 @@ def put_state(args, state):
         output.write(yaml.dump(state, default_flow_style=False, Dumper=noalias_dumper))
     return True
 
-def check_pipeline(name, config, pipeline_state):
-    commit_sha = get_commit_sha(config['git_url'], config['branch'])
+def check_pipeline(name, config, state):
+    commit_sha = get_commit_sha(config['git_url'],
+                                config['branch'])
     if not commit_sha:
-        pipeline_state['check_error'] = True
-        return pipeline_state
-    pipeline_state['check_error'] = False
-    if commit_sha == pipeline_state['commit_sha']:
-        return pipeline_state
-    pipeline_state['commit_sha'] = commit_sha
-    pipeline = get_pipeline_config(config['git_url'], commit_sha)
-    if not pipeline:
-        pipeline_state['config_error'] = True
-        return pipeline_state
-    pipeline_state['config_error'] = False
+        state['check_error'] = True
+        return state
+    state['check_error'] = False
+    if commit_sha == state['commit_sha']:
+        return state
+    state['commit_sha'] = commit_sha
+    kubeline_yaml = get_kubeline_yaml(config['git_url'], commit_sha)
+    if not kubeline_yaml or not check_secret(config):
+        state['config_error'] = True
+        return state
+    state['config_error'] = False
     msg = 'triggering {} at {} on {}...'
     print(msg.format(name, commit_sha, config['branch']))
-    build_spec = {
-        'pipeline_name': name,
-        'stages': pipeline['stages'],
-        'iteration': pipeline_state['iteration']+1,
-        'git': {
-            'url': config['git_url'],
-            'branch': config['branch'],
-            'commit_sha': commit_sha,
-        },
-    }
-    resp = Build(build_spec)
+
+    state['iteration'] += 1
+    resp = Build(name, config, kubeline_yaml, state)
+    if not resp:
+        state['iteration'] -= 1
+        state['run_error'] = True
+        msg = 'ERROR triggering {} at {}'
+        print(msg.format(name, commit_sha[:6]))
+        return state
     msg = 'successfully triggered pipeline {} at ref {}'
     print(msg.format(name, commit_sha[:6]))
-    pipeline_state['iteration'] += 1
-    pipeline_state['last_run'] = resp.metadata.creation_timestamp.timestamp()
-    return pipeline_state
+    state['run_error'] = False
+    state['job_name'] = resp.metadata.name
+    state['last_run'] = resp.metadata.creation_timestamp.timestamp()
+    return state
 
 def init_state(args, config):
     defaults = {'iteration': 0,
@@ -102,18 +102,22 @@ def init_state(args, config):
 def init_metrics(pipelines, state, metrics=None):
     if not metrics:
         metrics = {
-            'iteration': Gauge('kubeline_iteration',
-                               'iteration of a configured pipeline',
-                               ['pipeline']),
             'check_error': Gauge('kubeline_check_error',
                                  'error checking the git repo for new versions',
                                  ['pipeline']),
             'config_error': Gauge('kubeline_config_error',
-                                  'improperly formatted kubeline.yml file',
+                                  'improperly formatted kubeline.yml file, or \
+missing/misconfigured imagePullSecret',
                                   ['pipeline']),
+            'run_error': Gauge('kubeline_run_error',
+                                  'error triggering build',
+                                  ['pipeline']),
+            'iteration': Gauge('kubeline_iteration',
+                               'iteration of a configured pipeline',
+                               ['pipeline', 'job_name']),
             'last_run': Gauge('kubeline_last_run',
                               'pipeline\'s most recent run time',
-                              ['pipeline'])
+                              ['pipeline', 'job_name']),
         }
         return metrics
     for metric in metrics:
@@ -123,6 +127,15 @@ def init_metrics(pipelines, state, metrics=None):
             if label not in pipelines:
                 metrics[metric].remove(label)
     return metrics
+
+def set_metrics(name, state, metrics):
+    metrics['check_error'].labels(name).set(state['check_error'])
+    metrics['config_error'].labels(name).set(state['config_error'])
+    metrics['run_error'].labels(name).set(state['run_error'])
+    metrics['iteration'].labels(name, state.get('job_name')).set(
+        state['iteration'])
+    metrics['last_run'].labels(name, state.get('job_name')).set(
+        state['last_run'])
 
 def main(args):
     config = load_config(args)
@@ -149,10 +162,7 @@ def main(args):
             for name in config['pipelines']:
                 print('checking', name)
                 state[name] = check_pipeline(name, config['pipelines'][name], state[name])
-                metrics['iteration'].labels(name).set(state[name]['iteration'])
-                metrics['check_error'].labels(name).set(state[name].get('check_error') or False)
-                metrics['config_error'].labels(name).set(state[name].get('config_error') or False)
-                metrics['last_run'].labels(name).set(state[name].get('last_run') or False)
+                set_metrics(name, state[name], metrics)
             put_state(args, state)
             last_check = now()
         sleep(1)

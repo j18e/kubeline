@@ -1,14 +1,14 @@
-{%- set docker_image = 'kubeline-{}:{}'.format(pipeline_name, git.commit_sha[:6]) %}
+{%- set docker_image = 'kubeline-{}:{}'.format(name, state.commit_sha[:6]) %}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: "build-{{ pipeline_name }}-"
+  generateName: "build-{{ name }}-"
   labels:
     app: kubeline
-    pipeline: "{{ pipeline_name }}"
-    iteration: "{{ iteration }}"
-    git-commit: "{{ git.commit_sha[:6] }}"
-    git-branch: "{{ git.branch }}"
+    pipeline: "{{ name }}"
+    iteration: "{{ state.iteration }}"
+    git-commit: "{{ state.commit_sha[:6] }}"
+    git-branch: "{{ config.branch }}"
 spec:
   # run only one single pod of the job
   backoffLimit: 0
@@ -16,10 +16,10 @@ spec:
   metadata:
     labels:
       app: kubeline
-      pipeline: "{{ pipeline_name }}"
-      iteration: "{{ iteration }}"
-      git-commit: "{{ git.commit_sha[:6] }}"
-      git-branch: "{{ git.branch }}"
+      pipeline: "{{ name }}"
+      iteration: "{{ state.iteration }}"
+      git-commit: "{{ state.commit_sha[:6] }}"
+      git-branch: "{{ config.branch }}"
   template:
     spec:
       # don't let the job run longer than 1 hour
@@ -33,8 +33,8 @@ spec:
         args:
         - -ceux
         - |
-          git clone {{ git.url }} /work
-          git checkout {{ git.commit_sha }}
+          git clone {{ config.git_url }} /work
+          git checkout {{ state.commit_sha }}
           touch /stage-status/STAGE_0_COMPLETE
         volumeMounts:
         - name: work
@@ -74,15 +74,15 @@ spec:
         - name: KUBELINE_STAGE_NUMBER
           value: "{{ loop.index }}"
         - name: KUBELINE_ITERATION
-          value: "{{ iteration }}"
+          value: "{{ state.iteration }}"
         - name: KUBELINE_GIT_URL
-          value: "{{ git.url }}"
+          value: "{{ config.git_url }}"
         - name: KUBELINE_GIT_BRANCH
-          value: "{{ git.branch }}"
+          value: "{{ config.branch }}"
         - name: KUBELINE_GIT_COMMIT
-          value: "{{ git.commit_sha }}"
+          value: "{{ state.commit_sha }}"
         - name: KUBELINE_GIT_COMMIT_SHORT
-          value: "{{ git.commit_sha[:6] }}"
+          value: "{{ state.commit_sha[:6] }}"
         - name: KUBELINE_DOCKER_IMAGE
           value: "{{ docker_image }}"
         volumeMounts:
@@ -95,7 +95,7 @@ spec:
           mountPath: /var/run/docker.sock
         - name: docker-binary
           mountPath: /usr/bin/docker
-        {%- if stage.type == 'docker-push' %}
+        {%- if 'docker_secret' in config %}
         - name: docker-creds
           mountPath: /root/.docker/config.json
           subPath: .dockerconfigjson
@@ -113,7 +113,9 @@ spec:
       - name: docker-binary
         hostPath:
           path: /usr/bin/docker
+      {%- if 'docker_secret' in config %}
       - name: docker-creds
         secret:
-          secretName: kubeline-docker-creds
+          secretName: {{ config.docker_secret }}
+      {%- endif %}
 

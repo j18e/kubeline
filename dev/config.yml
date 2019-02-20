@@ -5,6 +5,7 @@ check_frequency: 15
 pipelines:
   test-1:
     git_url: https://github.com/j18e/ci-test-1.git
+    docker_secret: kubeline-docker-creds
     ##
     ## if git_branch is not specified, master is assumed
     ##

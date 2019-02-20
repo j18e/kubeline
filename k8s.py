@@ -1,16 +1,24 @@
 from jinja2 import Template, Environment, FileSystemLoader, StrictUndefined
 from jinja2.exceptions import UndefinedError
 from kubernetes import client, config
+from kubernetes.client.rest import ApiException
 from random import randint
 from os import environ, path
 import yaml
 
-def Build(build_spec):
-    if not validate_spec(build_spec):
+def Build(name, config, kubeline_yaml, state):
+    if not validate_spec(kubeline_yaml):
         return False
     template_file = 'templates/job.jinja.yml'
     env = Environment(loader=FileSystemLoader('.'), undefined=StrictUndefined)
     template = env.get_template(template_file)
+
+    build_spec = {
+        'name': name,
+        'config': config,
+        'stages': kubeline_yaml['stages'],
+        'state': state,
+    }
     body = template.render(build_spec)
     body = yaml.load(body)
     resp = trigger_build(body)
@@ -22,8 +30,27 @@ def trigger_build(body):
     resp = batch.create_namespaced_job(get_namespace(), body)
     return resp
 
-def validate_spec(spec):
-    for idx, stage in enumerate(spec['stages']):
+def check_secret(config):
+    if not 'docker_secret' in config:
+        return True
+    load_config()
+    namespace = get_namespace()
+    core = client.CoreV1Api()
+    msg = 'ERROR getting secret {} in namespace {} - '.format(config['docker_secret'], namespace)
+    try:
+        resp = core.read_namespaced_secret(config['docker_secret'], namespace)
+        secret_type = 'kubernetes.io/dockerconfigjson'
+        assert resp.type == secret_type
+    except ApiException:
+        print(msg + 'could not locate secret')
+        return False
+    except AssertionError:
+        print(msg + 'is not type ' + secret_type)
+        return False
+    return True
+
+def validate_spec(kubeline_yaml):
+    for idx, stage in enumerate(kubeline_yaml['stages']):
         required_fields = ['name', 'type']
         valid_types = ['docker-build', 'docker-push']
         msg = 'ERROR in stage {} - '.format(idx+1)

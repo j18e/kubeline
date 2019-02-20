@@ -43,7 +43,7 @@ def clone_commit(url, commit_sha):
         return False
     return path
 
-def get_pipeline_config(url, commit_sha):
+def get_kubeline_yaml(url, commit_sha):
     path = clone_commit(url, commit_sha)
     full_path = path + '/kubeline.yml'
     if not path:
