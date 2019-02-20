@@ -75,8 +75,14 @@ def check_pipeline(name, config, state):
     return state
 
 def init_state(args, config):
-    defaults = {'iteration': 0,
-                'commit_sha': None}
+    defaults = {
+        'iteration': 0,
+        'commit_sha': None,
+        'check_error': False,
+        'config_error': False,
+        'run_error': False,
+        'last_run': False
+    }
 
     if os.path.isfile(args['--state-file']):
         with open(args['--state-file']) as stream:
@@ -92,6 +98,9 @@ def init_state(args, config):
         if name not in config['pipelines']:
             del(result[name])
             continue
+        for key in defaults:
+            if not result[name].get(key):
+                result[name][key] = defaults[key]
         if not result[name]['commit_sha']:
             result[name]['commit_sha'] = get_commit_sha(
                 config['pipelines'][name]['git_url'],
@@ -129,13 +138,12 @@ missing/misconfigured imagePullSecret',
     return metrics
 
 def set_metrics(name, state, metrics):
+    job_name = state.get('job_name') or ''
     metrics['check_error'].labels(name).set(state['check_error'])
     metrics['config_error'].labels(name).set(state['config_error'])
     metrics['run_error'].labels(name).set(state['run_error'])
-    metrics['iteration'].labels(name, state.get('job_name')).set(
-        state['iteration'])
-    metrics['last_run'].labels(name, state.get('job_name')).set(
-        state['last_run'])
+    metrics['iteration'].labels(name, job_name).set(state['iteration'])
+    metrics['last_run'].labels(name, job_name).set(state['last_run'])
 
 def main(args):
     config = load_config(args)
