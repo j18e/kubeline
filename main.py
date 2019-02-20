@@ -72,7 +72,6 @@ def check_pipeline(name, config, pipeline_state):
     print(msg.format(name, commit_sha[:6]))
     pipeline_state['iteration'] += 1
     pipeline_state['last_run'] = resp.metadata.creation_timestamp.timestamp()
-    print('in check_pipeline:', pipeline_state['commit_sha'])
     return pipeline_state
 
 def init_state(args, config):
@@ -155,6 +154,7 @@ def main(args):
                 metrics['config_error'].labels(name).set(state[name].get('config_error') or False)
                 metrics['last_run'].labels(name).set(state[name].get('last_run') or False)
             put_state(args, state)
+            last_check = now()
         sleep(1)
 
 if __name__ == '__main__':
