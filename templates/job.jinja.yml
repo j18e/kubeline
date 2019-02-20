@@ -1,4 +1,5 @@
 {%- set docker_image = 'kubeline-{}:{}'.format(name, state.commit_sha[:6]) %}
+{%- set status_dir = '/stage-status' %}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -26,57 +27,69 @@ spec:
       activeDeadlineSeconds: 3600
       restartPolicy: Never
       initContainers:
-      - name: clone
+      - name: 0-clone
         image: alpine/git
         workingDir: /work
         command: [sh]
         args:
-        - -ceux
+        - -c
         - |
+          function fail() {
+              touch {{ status_dir }}/STAGE_FAILURE
+          }
+          trap fail EXIT
+          set -eu
+
           git clone {{ config.git_url }} /work
           git checkout {{ state.commit_sha }}
-          touch /stage-status/STAGE_0_COMPLETE
+          touch {{ status_dir }}/STAGE_0_COMPLETE
         volumeMounts:
         - name: work
           mountPath: /work
         - name: status
-          mountPath: /stage-status
+          mountPath: {{ status_dir }}
       containers:
       {%- for stage in stages %}
-      - name: {{ stage.name }}
+        {%- set stage_number = loop.index %}
+        {%- set previous_stage_number = loop.index - 1 %}
+      - name: {{ stage_number}}-{{ stage.name }}
         image: alpine:3.9
         workingDir: /work
         command: [sh]
         args:
-        - -ceu
+        - -c
         - |
-          echo "waiting for completion of stage $((KUBELINE_STAGE_NUMBER-1))..."
-          until [ -f "/stage-status/STAGE_$((KUBELINE_STAGE_NUMBER-1))_COMPLETE" ]; do
+          function fail() {
+              touch {{ status_dir }}/STAGE_FAILURE
+          }
+          trap fail EXIT
+          set -eu
+
+          echo "waiting for completion of stage {{ previous_stage_number }}..."
+          until [ -f "{{ status_dir }}/STAGE_{{ previous_stage_number }}_COMPLETE" ]; do
+              if [ -f "{{ status_dir }}/STAGE_FAILURE" ]; then
+                  echo "exiting due to previous stage failure..."
+                  exit 0
+              fi
               sleep 1
           done
           echo "starting"
 
           set -x
-          {% if stage.type == 'docker-build' %}
+          {%- if stage.type == 'docker-build' %}
           docker build -t {{ docker_image }} .
-          {% elif stage.type == 'docker-push' %}
-          {% for tag in stage.tags %}
+          {%- elif stage.type == 'docker-push' %}
+          {%- for tag in stage.tags %}
           docker tag {{ docker_image }} "{{ stage.repo }}:{{ tag }}"
           docker push "{{ stage.repo }}:{{ tag }}"
           {%- endfor %}
           {%- endif %}
           set +x
-          echo "finished"
-          touch /stage-status/STAGE_$(KUBELINE_STAGE_NUMBER)_COMPLETE
+          echo "finished stage {{ stage_number }} {{ stage.name }}"
+          touch {{ status_dir }}/STAGE_{{ stage_number }}_COMPLETE
         env:
-        - name: KUBELINE_STAGE_NAME
-          value: "{{ stage.name }}"
-        - name: KUBELINE_STAGE_NUMBER
-          value: "{{ loop.index }}"
         - name: KUBELINE_ITERATION
           value: "{{ state.iteration }}"
-        - name: KUBELINE_GIT_URL
-          value: "{{ config.git_url }}"
         - name: KUBELINE_GIT_BRANCH
           value: "{{ config.branch }}"
         - name: KUBELINE_GIT_COMMIT
@@ -89,17 +102,17 @@ spec:
         - name: work
           mountPath: /work
         - name: status
-          mountPath: /stage-status
+          mountPath: {{ status_dir }}
         {%- if stage.type == 'docker-build' or 'docker-push' %}
         - name: docker-socket
           mountPath: /var/run/docker.sock
         - name: docker-binary
           mountPath: /usr/bin/docker
-        {%- if 'docker_secret' in config %}
+          {%- if 'docker_secret' in config %}
         - name: docker-creds
           mountPath: /root/.docker/config.json
           subPath: .dockerconfigjson
-        {%- endif %}
+          {%- endif %}
         {%- endif %}
       {%- endfor %}
       volumes:
