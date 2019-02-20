@@ -1,12 +1,21 @@
 from git import Repo, cmd
 from git.exc import GitCommandError
 from random import randint
+from requests import get
 from shutil import rmtree
-from yaml import load
 import os.path
+import yaml
 
 def get_commit_sha(url, branch):
     client = cmd.Git()
+    if url.startswith('https://'):
+        try:
+            resp = get(url)
+            resp.raise_for_status()
+        except HTTPError:
+            msg = 'ERROR - {} does not exist or requires auth'
+            print(msg.format(url))
+            return None
     try:
         refs = client.ls_remote(url).split('\n')
         refs = [ref.split('\t')[0] for ref in refs
@@ -45,7 +54,7 @@ def get_pipeline_config(url, commit_sha):
         rmtree(path)
         return False
     with open(full_path, 'r') as stream:
-        config = load(stream.read())
+        config = yaml.load(stream.read())
     rmtree(path)
     return config
 
