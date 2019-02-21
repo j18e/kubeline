@@ -14,7 +14,7 @@ Options:
 from datetime import datetime
 from docopt import docopt
 from git_funcs import get_kubeline_yaml, get_commit
-from k8s import Build, check_secret, get_recent_job
+from k8s import Build, check_secret, get_recent_job, validate_spec
 from prometheus_client import start_http_server, Gauge
 from time import sleep
 import yaml
@@ -46,6 +46,7 @@ def check_pipeline(name, config, commit, metrics):
     if new_commit == commit:
         return commit
     kubeline_yaml = get_kubeline_yaml(url, new_commit)
+    kubeline_yaml = validate_spec(kubeline_yaml)
     if not kubeline_yaml or not check_secret(config):
         metrics['config_error'].labels(name).set(True)
         return new_commit

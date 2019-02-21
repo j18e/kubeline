@@ -7,9 +7,6 @@ from os import environ, path
 import yaml
 
 def Build(name, config, commit, kubeline_yaml):
-    kubeline_yaml = validate_spec(kubeline_yaml)
-    if not kubeline_yaml:
-        return False
     template_file = 'templates/job.jinja.yml'
     env = Environment(loader=FileSystemLoader('.'), undefined=StrictUndefined)
     template = env.get_template(template_file)
