@@ -69,6 +69,9 @@ def check_secret(config):
     return True
 
 def validate_spec(kubeline_yaml):
+    if not (type(kubeline_yaml) is dict and 'stages' in kubeline_yaml):
+        print('ERROR - kubeline yaml file improperly formated')
+        return False
     get_missing = lambda fields, stage: [f for f in fields if f not in stage]
     build_stages = []
     for stage in kubeline_yaml['stages']:
