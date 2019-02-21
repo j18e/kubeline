@@ -6,7 +6,7 @@ from random import randint
 from os import environ, path
 import yaml
 
-def Build(name, config, kubeline_yaml, state):
+def Build(name, config, commit, kubeline_yaml):
     if not validate_spec(kubeline_yaml):
         return False
     template_file = 'templates/job.jinja.yml'
@@ -16,8 +16,8 @@ def Build(name, config, kubeline_yaml, state):
     build_spec = {
         'name': name,
         'config': config,
+        'commit': commit,
         'stages': kubeline_yaml['stages'],
-        'state': state,
     }
     body = template.render(build_spec)
     body = yaml.load(body)
@@ -29,6 +29,20 @@ def trigger_build(body):
     batch = client.BatchV1Api()
     resp = batch.create_namespaced_job(get_namespace(), body)
     return resp
+
+def get_job_commit(pipeline):
+    load_config()
+    batch = client.BatchV1Api()
+    namespace = get_namespace()
+    label_selector = 'app=kubeline,pipeline={}'.format(pipeline)
+    resp = batch.list_namespaced_job(namespace, label_selector=label_selector)
+    if len(resp.items) == 0:
+        return False
+    recent_build = resp.items[0]
+    for build in resp.items:
+        if build.status.start_time > recent_build.status.start_time:
+            recent_build = build
+    return recent_build.metadata.labels['commit']
 
 def check_secret(config):
     if not 'docker_secret' in config:

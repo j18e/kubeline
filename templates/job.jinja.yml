@@ -1,15 +1,14 @@
-{%- set docker_image = 'kubeline-{}:{}'.format(name, state.commit_sha[:6]) %}
 {%- set status_dir = '/stage-status' %}
+{%- set short_commit = commit[:6] %}
 apiVersion: batch/v1
 kind: Job
 metadata:
   generateName: "build-{{ name }}-"
   labels:
     app: kubeline
+    type: build
     pipeline: "{{ name }}"
-    iteration: "{{ state.iteration }}"
-    git-commit: "{{ state.commit_sha[:6] }}"
-    git-branch: "{{ config.branch }}"
+    commit: "{{ commit }}"
 spec:
   # run only one single pod of the job
   backoffLimit: 0
@@ -17,10 +16,9 @@ spec:
   metadata:
     labels:
       app: kubeline
+      type: build
       pipeline: "{{ name }}"
-      iteration: "{{ state.iteration }}"
-      git-commit: "{{ state.commit_sha[:6] }}"
-      git-branch: "{{ config.branch }}"
+      commit: "{{ commit }}"
   template:
     spec:
       # don't let the job run longer than 1 hour
@@ -38,10 +36,10 @@ spec:
               touch {{ status_dir }}/STAGE_FAILURE
           }
           trap fail EXIT
-          set -eu
+          set -eux
 
-          git clone {{ config.git_url }} /work
-          git checkout {{ state.commit_sha }}
+          git clone -q {{ config.git_url }} .
+          git checkout -q {{ commit }}
           touch {{ status_dir }}/STAGE_0_COMPLETE
         volumeMounts:
         - name: work
@@ -77,8 +75,10 @@ spec:
 
           set -x
           {%- if stage.type == 'docker-build' %}
+          {%- set docker_image = 'kubeline-{}:{}'.format(stage.name, short_commit) %}
           docker build -t {{ docker_image }} .
           {%- elif stage.type == 'docker-push' %}
+          {%- set docker_image = 'kubeline-{}:{}'.format(stage.from_stage, short_commit) %}
           {%- for tag in stage.tags %}
           docker tag {{ docker_image }} "{{ stage.repo }}:{{ tag }}"
           docker push "{{ stage.repo }}:{{ tag }}"
@@ -88,14 +88,12 @@ spec:
           echo "finished stage {{ stage_number }} {{ stage.name }}"
           touch {{ status_dir }}/STAGE_{{ stage_number }}_COMPLETE
         env:
-        - name: KUBELINE_ITERATION
-          value: "{{ state.iteration }}"
         - name: KUBELINE_GIT_BRANCH
           value: "{{ config.branch }}"
         - name: KUBELINE_GIT_COMMIT
-          value: "{{ state.commit_sha }}"
+          value: "{{ commit }}"
         - name: KUBELINE_GIT_COMMIT_SHORT
-          value: "{{ state.commit_sha[:6] }}"
+          value: "{{ short_commit }}"
         - name: KUBELINE_DOCKER_IMAGE
           value: "{{ docker_image }}"
         volumeMounts:
