@@ -70,6 +70,7 @@ def check_secret(config):
 
 def validate_spec(kubeline_yaml):
     get_missing = lambda fields, stage: [f for f in fields if f not in stage]
+    build_stages = []
     for stage in kubeline_yaml['stages']:
         msg = 'ERROR in stage {} - '.format(stage.get('name'))
         missing = get_missing(['name', 'type'], stage)
@@ -81,6 +82,7 @@ def validate_spec(kubeline_yaml):
             print(msg + 'invalid type')
             return False
         if stage['type'] == 'docker-build':
+            build_stages.append(stage['name'])
             if 'build_dir' not in stage:
                 stage['build_dir'] = '.'
             if 'dockerfile' not in stage:
@@ -90,7 +92,7 @@ def validate_spec(kubeline_yaml):
             if missing:
                 print(msg + 'missing field(s) ', missing)
                 return False
-            if stage['from_stage'] not in kubeline_yaml['stages']:
+            if stage['from_stage'] not in build_stages:
                 print(msg + 'from_stage', stage['from_stage'], 'not found')
                 return False
             if ':' in stage['repo']:

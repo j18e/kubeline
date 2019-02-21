@@ -1,7 +1,7 @@
 ##
 ## check_frequency measured in seconds
 ##
-check_frequency: 15
+check_frequency: 5
 pipelines:
   test-1:
     git_url: https://github.com/j18e/ci-test-1.git
