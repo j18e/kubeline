@@ -85,11 +85,11 @@ def main(args):
         if now() - last_check > check_frequency:
             new_check_frequency, new_pipelines = load_config(args)
             if new_pipelines != pipelines:
-                print('loading new config...')
+                print('LOAD new config...')
                 pipelines = new_pipelines
             for name in pipelines:
                 commits[name] = check_pipeline(name, pipelines[name],
-                    commits[name], metrics)
+                    commits.get(name), metrics)
                 if not commits[name]:
                     metrics['check_error'].labels(name).set(True)
             last_check = now()

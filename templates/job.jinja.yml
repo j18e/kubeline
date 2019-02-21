@@ -14,14 +14,14 @@ spec:
   # run only one single pod of the job
   backoffLimit: 0
   completions: 1
-  metadata:
-    labels:
-      app: kubeline
-      type: build
-      pipeline: "{{ name }}"
-      commit: "{{ commit }}"
-      commit_short: "{{ short_commit }}"
   template:
+    metadata:
+      labels:
+        app: kubeline
+        type: build
+        pipeline: "{{ name }}"
+        commit: "{{ commit }}"
+        commit_short: "{{ short_commit }}"
     spec:
       # don't let the job run longer than 1 hour
       activeDeadlineSeconds: 3600
