@@ -76,7 +76,7 @@ spec:
           set -x
           {%- if stage.type == 'docker-build' %}
           {%- set docker_image = 'kubeline-{}:{}'.format(stage.name, short_commit) %}
-          docker build -t {{ docker_image }} .
+          docker build -t {{ docker_image }} -f {{ stage.dockerfile }} {{ stage.build_dir }}
           {%- elif stage.type == 'docker-push' %}
           {%- set docker_image = 'kubeline-{}:{}'.format(stage.from_stage, short_commit) %}
           {%- for tag in stage.tags %}

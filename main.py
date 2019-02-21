@@ -13,8 +13,8 @@ Options:
 
 from datetime import datetime
 from docopt import docopt
-from git_funcs import get_kubeline_yaml, get_commit_sha
-from k8s import Build, check_secret, get_job_commit
+from git_funcs import get_kubeline_yaml, get_commit
+from k8s import Build, check_secret, get_recent_job
 from prometheus_client import start_http_server, Gauge
 from time import sleep
 import yaml
@@ -30,22 +30,22 @@ def load_config(args):
     return config['check_frequency'], config['pipelines']
 
 def check_pipeline(name, config, commit, metrics):
+    url = config['git_url']
+    branch = config['branch']
     if not commit:
-        commit = get_job_commit(name) or get_commit_sha(
-            config['git_url'], config['branch'])
-        if not commit:
-            metrics['check_error'].labels(name).set(True)
-        return commit
-    msg = 'CHECK {} for commit newer than {}'
-    print(msg.format(name, commit[:6]))
-    new_commit = get_commit_sha(config['git_url'], config['branch'])
+        job = get_recent_job(name)
+        if job:
+            commit = job.metadata.labels.get('commit')
+        else:
+            return get_commit(url, branch)
+    print('CHECK {} for commit newer than {}'.format(name, commit[:6]))
+    new_commit = get_commit(url, branch)
     if not new_commit:
-        metrics['check_error'].labels(name).set(True)
         return commit
     metrics['check_error'].labels(name).set(False)
     if new_commit == commit:
         return commit
-    kubeline_yaml = get_kubeline_yaml(config['git_url'], new_commit)
+    kubeline_yaml = get_kubeline_yaml(url, new_commit)
     if not kubeline_yaml or not check_secret(config):
         metrics['config_error'].labels(name).set(True)
         return new_commit
@@ -90,6 +90,8 @@ def main(args):
             for name in pipelines:
                 commits[name] = check_pipeline(name, pipelines[name],
                     commits[name], metrics)
+                if not commits[name]:
+                    metrics['check_error'].labels(name).set(True)
             last_check = now()
         sleep(1)
 

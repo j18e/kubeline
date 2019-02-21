@@ -1,9 +1,19 @@
 stages:
 - name: build
   type: docker-build
+  ## specify directory to build in (default . )
+  ##
+  # build_dir: ./src
+  ## specify path/name of dockerfile (default ./Dockerfile)
+  ##
+  # dockerfile: ./src/dockerfile.build
 - name: push
   type: docker-push
-  # repo may not contain tags
+  ## name of docker-build stage from which to tag/push image
+  ##
+  from_stage: build
+  ## repo may not contain tags
+  ##
   repo: j18e/kubeline
   tags:
   - latest

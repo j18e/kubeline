@@ -7,7 +7,8 @@ from os import environ, path
 import yaml
 
 def Build(name, config, commit, kubeline_yaml):
-    if not validate_spec(kubeline_yaml):
+    kubeline_yaml = validate_spec(kubeline_yaml)
+    if not kubeline_yaml:
         return False
     template_file = 'templates/job.jinja.yml'
     env = Environment(loader=FileSystemLoader('.'), undefined=StrictUndefined)
@@ -30,19 +31,23 @@ def trigger_build(body):
     resp = batch.create_namespaced_job(get_namespace(), body)
     return resp
 
-def get_job_commit(pipeline):
+def get_recent_job(pipeline):
     load_config()
     batch = client.BatchV1Api()
     namespace = get_namespace()
-    label_selector = 'app=kubeline,pipeline={}'.format(pipeline)
-    resp = batch.list_namespaced_job(namespace, label_selector=label_selector)
+    labels = 'app=kubeline,pipeline={}'.format(pipeline)
+    limit=20
+    resp = batch.list_namespaced_job(namespace, label_selector=labels,
+                                     limit=limit)
     if len(resp.items) == 0:
         return False
-    recent_build = resp.items[0]
-    for build in resp.items:
-        if build.status.start_time > recent_build.status.start_time:
-            recent_build = build
-    return recent_build.metadata.labels['commit']
+    results = [item for item in resp.items]
+    while resp.metadata._continue:
+        resp = batch.list_namespaced_job(namespace, label_selector=labels,
+            limit=limit, _continue=resp.metadata._continue)
+        for item in resp.items:
+            results.append(item)
+    return max(results, key=lambda r: r.status.start_time)
 
 def check_secret(config):
     if not 'docker_secret' in config:
@@ -64,25 +69,34 @@ def check_secret(config):
     return True
 
 def validate_spec(kubeline_yaml):
-    for idx, stage in enumerate(kubeline_yaml['stages']):
-        required_fields = ['name', 'type']
+    get_missing = lambda fields, stage: [f for f in fields if f not in stage]
+    for stage in kubeline_yaml['stages']:
+        msg = 'ERROR in stage {} - '.format(stage.get('name'))
+        missing = get_missing(['name', 'type'], stage)
+        if missing:
+            print(msg + 'missing field(s) ', missing)
+            return False
         valid_types = ['docker-build', 'docker-push']
-        msg = 'ERROR in stage {} - '.format(idx+1)
-        for field in required_fields:
-            if not field in stage:
-                print(msg + 'required field {}'.format(field))
-                return False
         if stage['type'] not in valid_types:
             print(msg + 'invalid type')
             return False
+        if stage['type'] == 'docker-build':
+            if 'build_dir' not in stage:
+                stage['build_dir'] = '.'
+            if 'dockerfile' not in stage:
+                stage['dockerfile'] = 'Dockerfile'
         if stage['type'] == 'docker-push':
-            if (':' in stage.get('repo')) or ('repo' not in stage):
-                print(msg + 'repo field absent or misconfigured')
+            missing = get_missing(['from_stage', 'repo', 'tags'], stage)
+            if missing:
+                print(msg + 'missing field(s) ', missing)
                 return False
-            if not stage.get('tags'):
-                print(msg + 'docker push stage must contain list of tags')
+            if stage['from_stage'] not in kubeline_yaml['stages']:
+                print(msg + 'from_stage', stage['from_stage'], 'not found')
                 return False
-    return True
+            if ':' in stage['repo']:
+                print(msg + 'repo field may not contain tags')
+                return False
+    return kubeline_yaml
 
 def get_namespace():
     namespace = 'default'

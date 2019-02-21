@@ -6,7 +6,7 @@ from shutil import rmtree
 import os.path
 import yaml
 
-def get_commit_sha(url, branch):
+def get_commit(url, branch):
     client = cmd.Git()
     if url.startswith('https://'):
         try:
@@ -21,7 +21,7 @@ def get_commit_sha(url, branch):
         refs = [ref.split('\t')[0] for ref in refs
                if ref.split('\t')[1].split('/')[-1] == branch]
     except GitCommandError as e:
-        msg = 'ERROR fetching most recent commit sha for {} on branch {}'
+        msg = 'ERROR fetching most recent commit for {} on branch {}'
         print(msg.format(url, branch))
         print(e)
         return None
@@ -29,28 +29,28 @@ def get_commit_sha(url, branch):
         return None
     return refs[0]
 
-def clone_commit(url, commit_sha):
+def clone_commit(url, commit):
     repo_dir = str(randint(1000, 9999))
     path = 'tmp/repos/' + repo_dir
     try:
         repo = Repo.clone_from(url, path)
-        head = repo.create_head(path, commit_sha)
+        head = repo.create_head(path, commit)
         repo.head.reference = head
         repo.head.reset(index=True, working_tree=True)
     except:
         msg = 'ERROR cloning {} and checking out {}'
-        print(msg.format(url, commit_sha))
+        print(msg.format(url, commit))
         return False
     return path
 
-def get_kubeline_yaml(url, commit_sha):
-    path = clone_commit(url, commit_sha)
+def get_kubeline_yaml(url, commit):
+    path = clone_commit(url, commit)
     full_path = path + '/kubeline.yml'
     if not path:
         return False
     if not os.path.isfile(full_path):
         msg = 'ERROR {} not found in {} at {}'
-        print(msg.format(full_path.split('/')[-1], url, commit_sha))
+        print(msg.format(full_path.split('/')[-1], url, commit))
         rmtree(path)
         return False
     with open(full_path, 'r') as stream:
