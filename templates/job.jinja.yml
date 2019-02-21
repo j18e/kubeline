@@ -9,6 +9,7 @@ metadata:
     type: build
     pipeline: "{{ name }}"
     commit: "{{ commit }}"
+    commit_short: "{{ short_commit }}"
 spec:
   # run only one single pod of the job
   backoffLimit: 0
@@ -19,6 +20,7 @@ spec:
       type: build
       pipeline: "{{ name }}"
       commit: "{{ commit }}"
+      commit_short: "{{ short_commit }}"
   template:
     spec:
       # don't let the job run longer than 1 hour
