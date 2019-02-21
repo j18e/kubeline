@@ -1,29 +1,38 @@
 groups:
 - name: kubeline
+  interval: 30s
   rules:
-  - record: job:kubeline_pipeline_status
+  - record: kubeline:job_status
+    labels:
+      app: kubeline
     expr: |
+      (kubeline_check_error + kubeline_config_error + kubeline_run_error == 0)
+      + on (pipeline) group_right() label_replace(
+        label_replace(
+          kube_job_labels * on (job_name) group_left()
+          (
+            (kube_job_status_failed{job_name=~"build-.*"} == 1) - 1 or
+            (kube_job_status_active{job_name=~"build-.*"} == 1) * 1 or
+            (kube_job_status_succeeded{job_name=~"build-.*"} == 1) + 1
+          ), "pipeline", "$1", "label_pipeline", "(.*)")
+        , "kubernetes_namespace", "$1", "namespace", "(.*)")
+  - record: kubeline:job_start_time
+    labels:
+      app: kubeline
+    expr: (kubeline:job_status * 0) + on (job_name) group_left kube_job_status_start_time
+  - record: kubeline:job_completion_time
+    labels:
+      app: kubeline
+    expr: ((kubeline:job_status == 2) * 0) + on (job_name) group_left kube_job_status_completion_time
+  - record: kubeline:pipeline_status
+    labels:
+      app: kubeline
+    expr: |
+      (kubeline_check_error == 1) - 2 or
+      (kubeline_config_error == 1) - 3 or
+      (kubeline_run_error == 1) - 4 or
       clamp_max(
-        max(
-          kube_job_status_start_time
-          * on (job_name) group_right() kube_job_labels{label_pipeline=~".+"}
-        ) by (job_name, label_pipeline)
-        == on (label_pipeline) group_left()
-        max(
-          kube_job_status_start_time
-          * on (job_name) group_right() kube_job_labels
-        ) by (label_pipeline)
-      , 1
-      )
-      * on (job_name) group_right() (
-        (kube_job_status_active == 1) - 1 or
-        (kube_job_status_failed == 1) or
-        (kube_job_status_succeeded == 1) + 1
-      )
-  - record: job:kubeline_job_status
-    expr: |
-      (
-        (kube_job_status_active{job_name=~".+"} == 1) - 1 or
-        (kube_job_status_failed{job_name=~".+"} == 1) + 0 or
-        (kube_job_status_succeeded{job_name=~".+"} == 1) + 1
-      ) * on (job_name) group_right() kube_job_labels
+        max(kubeline:job_start_time) without()
+        == on (pipeline) group_left()
+        max(kubeline:job_start_time) by (pipeline)
+      , 1) * on (job_name) group_right() (kubeline:job_status)
