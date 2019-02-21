@@ -2,6 +2,7 @@ from git import Repo, cmd
 from git.exc import GitCommandError
 from random import randint
 from requests import get
+from requests.exceptions import HTTPError
 from shutil import rmtree
 import os.path
 import yaml
