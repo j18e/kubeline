@@ -62,7 +62,7 @@ def check_pipeline(name, config, commit, metrics):
     return new_commit
 
 def main(args):
-    labels = ['pipelines']
+    labels = ['pipeline']
     metrics = {
         'check_error': Gauge('kubeline_check_error',
             'error checking git', labels),
