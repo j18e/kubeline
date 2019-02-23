@@ -11,6 +11,8 @@ Options:
   --namespace=<namespace>           namespace in which to run jobs
   --influxdb-host=<name>            hostname of influxdb server
   --influxdb-db=<name>              name of the influxdb database to use [default: kubeline]
+  --job-runner-image=<name>         image to pull for the job runner [default: j18e/job-runner:latest]
+  --git-key-secret=<name>           name of the kubernetes secret containing the ssh key for cloning repositories [default: kubeline-git-key]
   -h --help                         show this help text
 
 """

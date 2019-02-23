@@ -52,7 +52,7 @@ spec:
       {%- set log_file = '{}/{}'.format(log_dir, stage_id) %}
       {%- set append = '>> {} 2>&1'.format(log_file) %}
       - name: job-runner
-        image: j18e/job-runner:0.1.2
+        image: {{ job_runner_image }}
         imagePullPolicy: Always
         args:
         - --pipeline={{ pipeline_name }}

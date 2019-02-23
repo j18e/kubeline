@@ -12,6 +12,7 @@ def Build(args, pipeline_name, config, iteration, commit, kubeline_yaml, namespa
     template = env.get_template(template_file)
 
     build_spec = {
+        'job_runner_image': args['--job-runner-image'],
         'pipeline_name': pipeline_name,
         'config': config,
         'iteration': iteration,
