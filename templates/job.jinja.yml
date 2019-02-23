@@ -1,4 +1,5 @@
 {%- set short_commit = commit[:6] %}
+{%- set job_name = pipeline_name + '-' + iteration|string %}
 {%- set work_dir = '/kubeline-work' %}
 {%- set log_dir = '/kubeline-logs' %}
 {%- set stage_completion_string = 'KUBELINE_STAGE_FINISHED' %}
@@ -21,11 +22,12 @@ echo "starting"
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: "build-{{ name }}-"
+  generateName: "{{ job_name }}"
   labels:
     app: kubeline
     type: build
-    pipeline: "{{ name }}"
+    pipeline: "{{ pipeline_name }}"
+    iteration: "{{ iteration }}"
     commit: "{{ commit }}"
     commit_short: "{{ short_commit }}"
 spec:
@@ -37,7 +39,8 @@ spec:
       labels:
         app: kubeline
         type: build
-        pipeline: "{{ name }}"
+        pipeline: "{{ pipeline_name }}"
+        iteration: "{{ iteration }}"
         commit: "{{ commit }}"
         commit_short: "{{ short_commit }}"
     spec:
@@ -48,14 +51,18 @@ spec:
       {%- set stage_id = '0-clone' %}
       {%- set log_file = '{}/{}'.format(log_dir, stage_id) %}
       {%- set append = '>> {} 2>&1'.format(log_file) %}
-      - name: log-follower
-        image: j18e/log-follower:0.1.2
+      - name: job-runner
+        image: j18e/job-runner:0.1.2
         imagePullPolicy: Always
         args:
+        - --pipeline={{ pipeline_name }}
+        - --job={{ job_name }}
         - --stages={% for stage in stages %}{{ loop.index }}-{{ stage.name }},{% endfor %}{{ stage_id }}
         - --log-dir={{ log_dir }}
-        - --stage-completion-string={{ stage_completion_string }}
-        - --stage-failure-string={{ stage_failure_string }}
+        - --completion-string={{ stage_completion_string }}
+        - --failure-string={{ stage_failure_string }}
+        - --influxdb-host={{ influxdb_host }}
+        - --influxdb-db={{ influxdb_db }}
         volumeMounts:
         - name: logs
           mountPath: {{ log_dir }}

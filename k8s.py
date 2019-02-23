@@ -6,56 +6,36 @@ from random import randint
 from os import environ, path
 import yaml
 
-def Build(name, config, commit, kubeline_yaml):
+def Build(args, pipeline_name, config, iteration, commit, kubeline_yaml, namespace):
     template_file = 'templates/job.jinja.yml'
     env = Environment(loader=FileSystemLoader('.'), undefined=StrictUndefined)
     template = env.get_template(template_file)
 
     build_spec = {
-        'name': name,
+        'pipeline_name': pipeline_name,
         'config': config,
+        'iteration': iteration,
         'commit': commit,
         'stages': kubeline_yaml['stages'],
+        'influxdb_host': args['--influxdb-host'],
+        'influxdb_db': args['--influxdb-db']
     }
     body = template.render(build_spec)
     body = yaml.load(body)
-    resp = trigger_build(body)
-    return resp
-
-def trigger_build(body):
     load_config()
     batch = client.BatchV1Api()
-    resp = batch.create_namespaced_job(get_namespace(), body)
+    if 'docker_secret' in config:
+        if not check_secret(config['docker_secret'], namespace):
+            return False
+    resp = batch.create_namespaced_job(namespace, body)
     return resp
 
-def get_recent_job(pipeline):
-    load_config()
-    batch = client.BatchV1Api()
-    namespace = get_namespace()
-    labels = 'app=kubeline,pipeline={}'.format(pipeline)
-    limit=20
-    resp = batch.list_namespaced_job(namespace, label_selector=labels,
-                                     limit=limit)
-    if len(resp.items) == 0:
-        return False
-    results = [item for item in resp.items]
-    while resp.metadata._continue:
-        resp = batch.list_namespaced_job(namespace, label_selector=labels,
-            limit=limit, _continue=resp.metadata._continue)
-        for item in resp.items:
-            results.append(item)
-    return max(results, key=lambda r: r.status.start_time)
-
-def check_secret(config):
-    if not 'docker_secret' in config:
-        return True
-    load_config()
-    namespace = get_namespace()
+def check_secret(name, namespace):
     core = client.CoreV1Api()
-    msg = 'ERROR getting secret {} in namespace {} - '.format(config['docker_secret'], namespace)
+    secret_type = 'kubernetes.io/dockerconfigjson'
+    msg = 'ERROR getting secret {} in namespace {} - '.format(name, namespace)
     try:
-        resp = core.read_namespaced_secret(config['docker_secret'], namespace)
-        secret_type = 'kubernetes.io/dockerconfigjson'
+        resp = core.read_namespaced_secret(name, namespace)
         assert resp.type == secret_type
     except ApiException:
         print(msg + 'could not locate secret')
@@ -64,6 +44,23 @@ def check_secret(config):
         print(msg + 'is not type ' + secret_type)
         return False
     return True
+
+def get_recent_job(pipeline, namespace):
+    load_config()
+    batch = client.BatchV1Api()
+    labels = 'app=kubeline,pipeline={}'.format(pipeline)
+    limit=20
+    resp = batch.list_namespaced_job(namespace, label_selector=labels,
+                                     limit=limit)
+    if len(resp.items) == 0:
+        return None
+    results = [item for item in resp.items]
+    while resp.metadata._continue:
+        resp = batch.list_namespaced_job(namespace, label_selector=labels,
+            limit=limit, _continue=resp.metadata._continue)
+        for item in resp.items:
+            results.append(item)
+    return max(results, key=lambda r: r.status.start_time)
 
 def validate_spec(kubeline_yaml):
     if not (type(kubeline_yaml) is dict and 'stages' in kubeline_yaml):
@@ -101,7 +98,7 @@ def validate_spec(kubeline_yaml):
     return kubeline_yaml
 
 def get_namespace():
-    namespace = 'default'
+    namespace = None
     file_path = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
     if path.isfile(file_path):
         with open(file_path, 'r') as stream:

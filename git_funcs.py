@@ -30,22 +30,31 @@ def get_commit(url, branch):
         return None
     return refs[0]
 
-def clone_commit(url, commit):
+def clone_repo(url, git_ref, is_branch=False):
     repo_dir = str(randint(1000, 9999))
     path = 'tmp/repos/' + repo_dir
     try:
         repo = Repo.clone_from(url, path)
-        head = repo.create_head(path, commit)
+        if is_branch:
+            if repo.active_branch == git_ref:
+                return path
+            ref_names = [ref.name.split('/')[-1] for ref in repo.refs]
+            git_ref = repo.refs[ref_names.index(git_ref)]
+        head = repo.create_head(path, git_ref)
         repo.head.reference = head
         repo.head.reset(index=True, working_tree=True)
     except:
         msg = 'ERROR cloning {} and checking out {}'
-        print(msg.format(url, commit))
+        print(msg.format(url, git_ref))
         return False
-    return path
+    return path, repo.head.commit.hexsha
 
-def get_kubeline_yaml(url, commit):
-    path = clone_commit(url, commit)
+def get_kubeline_yaml(config, commit=None):
+    url = config['git_url']
+    if commit:
+        path, commit = clone_repo(url, commit)
+    else:
+        path, commit = clone_repo(url, config['branch'])
     full_path = path + '/kubeline.yml'
     if not path:
         return False
@@ -57,5 +66,5 @@ def get_kubeline_yaml(url, commit):
     with open(full_path, 'r') as stream:
         config = yaml.load(stream.read())
     rmtree(path)
-    return config
+    return config, commit
 

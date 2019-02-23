@@ -2,7 +2,7 @@
 
 """
 Usage:
-  main.py [options] --pipeline=<name> --job=<name> --stages=<names> --log-dir=<dir> --completion-string=<string> --failure-string=<string> --influxdb-host=<host>
+  main.py [options] --pipeline=<name> --job=<name> --stages=<names> --log-dir=<dir> --completion-string=<string> --failure-string=<string> --influxdb-host=<host> --influxdb-db=<name>
 
 Starting with the first provided stage name, Kfollow will provision a log file
 named for the stage itself, in the --log-dir directory. Kfollow will tail the
@@ -16,7 +16,7 @@ Options:
   --log-dir=<dir>                       directory to contain log files
   --completion-string=<string>          log line signaling stage completion
   --failure-string=<string>             log line signaling stage failure
-  --influxdb-database=<name>            influxdb database to be written to [default: kubeline]
+  --influxdb-db=<name>                  influxdb database to be written to [default: kubeline]
   --influxdb-host=<host>                hostname of influxdb server
   -h --help                             show this help text
 """
@@ -43,7 +43,7 @@ def follow_file(client, tags, file_path, sig_finished, sig_failed, stage_success
     sleep_time = 0.1
     line = ''
 
-    client.write_points(format_metric('job_logs', tags, {'value': 'STARTING'}))
+    client.write_points(format_metric('job_logs', tags, {'value': 'starting'}))
     with open(file_path, 'r') as stream:
         while not line.startswith(sig_finished):
             line = stream.readline().rstrip()
@@ -62,7 +62,7 @@ def follow_file(client, tags, file_path, sig_finished, sig_failed, stage_success
 def main(args):
     pipeline = args['--pipeline']
     job = args['--job']
-    database = args['--influxdb-database']
+    database = args['--influxdb-db']
     client = InfluxDBClient(host=args['--influxdb-host'], database=database)
 
     sig_finished = args['--completion-string']

@@ -2,11 +2,15 @@
 
 """
 Usage:
-  main.py [options] --config-file=<file>
+  main.py [options] --config-file=<file> --influxdb-host=<name>
 
 Options:
-  --configmap=<name>                configmap from which to load config
   --config-file=<file>              config file to use [default: config.yml]
+  --http-mode                       enable http mode
+  --http-port=<port>                http port on which to listen [default: 8080]
+  --namespace=<namespace>           namespace in which to run jobs
+  --influxdb-host=<name>            hostname of influxdb server
+  --influxdb-db=<name>              name of the influxdb database to use [default: kubeline]
   -h --help                         show this help text
 
 """
@@ -14,8 +18,7 @@ Options:
 from datetime import datetime
 from docopt import docopt
 from git_funcs import get_kubeline_yaml, get_commit
-from k8s import Build, check_secret, get_recent_job, validate_spec
-from prometheus_client import start_http_server, Gauge
+from k8s import Build, get_recent_job, validate_spec, get_namespace
 from time import sleep
 import yaml
 
@@ -29,11 +32,11 @@ def load_config(args):
             'pipelines'][name].get('branch') or 'master'
     return config['check_frequency'], config['pipelines']
 
-def check_pipeline(name, config, commit, metrics):
+def check_pipeline(name, config, namespace, commit=None):
     url = config['git_url']
     branch = config['branch']
     if not commit:
-        job = get_recent_job(name)
+        job = get_recent_job(name, namespace)
         if job:
             commit = job.metadata.labels.get('commit')
         else:
@@ -42,39 +45,71 @@ def check_pipeline(name, config, commit, metrics):
     new_commit = get_commit(url, branch)
     if not new_commit:
         return commit
-    metrics['check_error'].labels(name).set(False)
     if new_commit == commit:
         return commit
-    kubeline_yaml = get_kubeline_yaml(url, new_commit)
+    kubeline_yaml = get_kubeline_yaml(config, commit=new_commit)
     kubeline_yaml = validate_spec(kubeline_yaml)
-    if not kubeline_yaml or not check_secret(config):
-        metrics['config_error'].labels(name).set(True)
-        return new_commit
-    metrics['config_error'].labels(name).set(False)
-    print('BUILD {} at {}...'.format(name, new_commit[:6]))
+    if not kubeline_yaml:
+        return new_commit,
+    return new_commit, kubeline_yaml
 
-    resp = Build(name, config, new_commit, kubeline_yaml)
+def trigger_pipeline(name, config, iteration, commit, kubeline_yaml, namespace):
+    if not commit:
+        commit = config['branch']
+    print('BUILD {} at {}...'.format(name, new_commit[:6]))
+    resp = Build(args, name, config, iteration, commit, kubeline_yaml, namespace)
     if not resp:
-        metrics['run_error'].labels(name).set(True)
         print('ERROR triggering {}'.format(name))
-        return new_commit
+        return False
     print('successfully triggered {}'.format(name))
-    metrics['run_error'].labels(name).set(False)
-    return new_commit
+    return True
 
 def main(args):
-    labels = ['pipeline']
-    metrics = {
-        'check_error': Gauge('kubeline_check_error',
-            'error checking git', labels),
-        'config_error': Gauge('kubeline_config_error',
-            'error in kubeline.yml or imagePullSecret', labels),
-        'run_error': Gauge('kubeline_run_error',
-            'error triggering build', labels)
-    }
-    start_http_server(8080)
-
     check_frequency, pipelines = load_config(args)
+    namespace = args['--namespace'] or get_namespace() or 'default'
+
+    iterations = {name: 0 for name in pipelines}
+    for name in pipelines:
+        recent_job = get_recent_job(name, namespace)
+        if recent_job:
+            if recent_job.metadata.labels.get('iteration'):
+                iterations[name] = int(recent_job.metadata.labels.get('iteration'))
+
+    if args['--http-mode']:
+        from flask import Flask
+        http_app = Flask('kubeline')
+
+        @http_app.errorhandler(404)
+        def not_found(error):
+            return '404 not found\n', 404
+
+        @http_app.errorhandler(500)
+        def not_found(error):
+            return '500 internal server error\n', 500
+
+        @http_app.route('/api/build/<pipeline>', methods=['POST'])
+        def trigger_build(pipeline):
+            if pipeline not in pipelines:
+                msg = 'ERROR - pipeline "{}" not found\n'.format(pipeline)
+                return msg, 404
+            config = pipelines[pipeline]
+            kubeline_yaml, commit = get_kubeline_yaml(config)
+            if not commit:
+                return 'ERROR getting git repo\n', 500
+            if not kubeline_yaml:
+                return 'ERROR getting kubeline yaml file\n', 500
+            kubeline_yaml = validate_spec(kubeline_yaml)
+            if not kubeline_yaml:
+                return 'ERROR validating kubeline yaml file\n', 500
+            resp = Build(args, pipeline, pipelines[pipeline], iterations[pipeline]+1, commit, kubeline_yaml, namespace)
+            if not resp:
+                return 'ERROR triggering the job\n', 500
+            iterations[pipeline] += 1
+            return 'job triggered'
+
+        http_app.run(host='0.0.0.0', port=int(args['--http-port']))
+        print('exiting...')
+        return
 
     check_msg = 'checking repos/config every {} seconds'
     print(check_msg.format(check_frequency))
@@ -90,9 +125,7 @@ def main(args):
                 pipelines = new_pipelines
             for name in pipelines:
                 commits[name] = check_pipeline(name, pipelines[name],
-                    commits.get(name), metrics)
-                if not commits[name]:
-                    metrics['check_error'].labels(name).set(True)
+                    namespace, commit=commits.get(name))
             last_check = now()
         sleep(1)
 
