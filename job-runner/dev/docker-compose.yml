@@ -1,0 +1,34 @@
+version: '3'
+services:
+#  log-follower:
+#    build: ../
+#    depends_on: ["influxdb"]
+#    command:
+#    - --pipeline=testy
+#    - --stages=1-build,2-push
+#    - --log-dir=/logs
+#    - --stage-completion-string=SUCCEEDED
+#    - --stage-failure-string=FAILED
+#    - --influxdb-host=influxdb
+#    volumes:
+#    - logs:/logs
+  influxdb:
+    image: "influxdb:1.5"
+    environment:
+      INFLUXDB_DB: kubeline
+    ports:
+    - 8086:8086
+  grafana:
+    image: "grafana/grafana"
+    depends_on: ["influxdb"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin1
+    ports:
+    - "3000:3000"
+    volumes:
+    - "./datasource.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro"
+    - "./dashboard.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro"
+    - "./dashboard.json:/etc/grafana/dashboards/dashboard.json:ro"
+volumes:
+  logs:
+

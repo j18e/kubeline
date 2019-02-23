@@ -1,0 +1,11 @@
+apiVersion: 1
+datasources:
+- name: kubeline
+  type: influxdb
+  url: http://influxdb:8086
+  database: kubeline
+  access: proxy
+  isDefault: true
+  jsonData:
+    keepCookies: []
+

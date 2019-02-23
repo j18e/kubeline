@@ -1,5 +1,23 @@
-{%- set status_dir = '/stage-status' %}
 {%- set short_commit = commit[:6] %}
+{%- set work_dir = '/kubeline-work' %}
+{%- set log_dir = '/kubeline-logs' %}
+{%- set stage_completion_string = 'KUBELINE_STAGE_FINISHED' %}
+{%- set stage_failure_string = 'KUBELINE_STAGE_FAILURE' %}
+{%- set init_string = '
+function fail() {{
+    echo "{0}" {1}
+}}
+trap fail EXIT
+until [ -f "{2}" ]; do
+    sleep 1
+done
+if grep {0} {2}; then
+    echo "exiting due to previous stage failure..."
+    exit 0
+fi
+echo "starting"
+'.strip() %}
+{%- set exit_string = 'echo "{0}" {1}\ntrap : 0' %}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -26,69 +44,63 @@ spec:
       # don't let the job run longer than 1 hour
       activeDeadlineSeconds: 3600
       restartPolicy: Never
-      initContainers:
-      - name: 0-clone
+      containers:
+      {%- set stage_id = '0-clone' %}
+      {%- set log_file = '{}/{}'.format(log_dir, stage_id) %}
+      {%- set append = '>> {} 2>&1'.format(log_file) %}
+      - name: log-follower
+        image: j18e/log-follower:0.1.2
+        imagePullPolicy: Always
+        args:
+        - --stages={% for stage in stages %}{{ loop.index }}-{{ stage.name }},{% endfor %}{{ stage_id }}
+        - --log-dir={{ log_dir }}
+        - --stage-completion-string={{ stage_completion_string }}
+        - --stage-failure-string={{ stage_failure_string }}
+        volumeMounts:
+        - name: logs
+          mountPath: {{ log_dir }}
+      - name: {{ stage_id }}
         image: alpine/git
-        workingDir: /work
+        workingDir: {{ work_dir }}
         command: [sh]
         args:
-        - -c
+        - -ceux
         - |
-          function fail() {
-              touch {{ status_dir }}/STAGE_FAILURE
-          }
-          trap fail EXIT
-          set -eux
-
-          git clone -q {{ config.git_url }} .
-          git checkout -q {{ commit }}
-          touch {{ status_dir }}/STAGE_0_COMPLETE
+          {{ init_string.format(stage_failure_string, append, log_file)|indent(10) }}
+          git clone {{ config.git_url }} . {{ append }}
+          git checkout {{ commit }} {{ append }}
+          {{ exit_string.format(stage_completion_string, append)|indent(10) }}
         volumeMounts:
         - name: work
-          mountPath: /work
-        - name: status
-          mountPath: {{ status_dir }}
-      containers:
+          mountPath: {{ work_dir }}
+        - name: logs
+          mountPath: {{ log_dir }}
       {%- for stage in stages %}
-        {%- set stage_number = loop.index %}
-        {%- set previous_stage_number = loop.index - 1 %}
-      - name: {{ stage_number}}-{{ stage.name }}
+        {%- set stage_id = '{}-{}'.format(loop.index, stage.name) %}
+        {%- set log_file = '{}/{}'.format(log_dir, stage_id) %}
+        {%- set append = '>> {} 2>&1'.format(log_file) %}
+      - name: {{ stage_id }}
         image: alpine:3.9
-        workingDir: /work
+        workingDir: {{ work_dir }}
         command: [sh]
         args:
-        - -c
+        - -ceux
         - |
-          function fail() {
-              touch {{ status_dir }}/STAGE_FAILURE
-          }
-          trap fail EXIT
-          set -eu
+          {{ init_string.format(stage_failure_string, append, log_file)|indent(10) }}
 
-          echo "waiting for completion of stage {{ previous_stage_number }}..."
-          until [ -f "{{ status_dir }}/STAGE_{{ previous_stage_number }}_COMPLETE" ]; do
-              if [ -f "{{ status_dir }}/STAGE_FAILURE" ]; then
-                  echo "exiting due to previous stage failure..."
-                  exit 0
-              fi
-              sleep 1
-          done
-          echo "starting"
-
-          set -x
           {%- if stage.type == 'docker-build' %}
-          {%- set docker_image = 'kubeline-{}:{}'.format(stage.name, short_commit) %}
-          docker build -t {{ docker_image }} -f {{ stage.dockerfile }} {{ stage.build_dir }}
+            {%- set docker_image = 'kubeline-{}:{}'.format(stage.name, short_commit) %}
+
+          docker build -t {{ docker_image }} -f {{ stage.dockerfile }} {{ stage.build_dir }} {{ append }}
+
           {%- elif stage.type == 'docker-push' %}
-          {%- set docker_image = 'kubeline-{}:{}'.format(stage.from_stage, short_commit) %}
-          {%- for tag in stage.tags %}
-          docker tag {{ docker_image }} "{{ stage.repo }}:{{ tag }}"
-          docker push "{{ stage.repo }}:{{ tag }}"
-          {%- endfor %}
+            {%- set docker_image = 'kubeline-{}:{}'.format(stage.from_stage, short_commit) %}
+            {%- for tag in stage.tags %}
+          docker tag {{ docker_image }} "{{ stage.repo }}:{{ tag }}" {{ append }}
+          docker push "{{ stage.repo }}:{{ tag }}" {{ append }}
+            {%- endfor %}
           {%- endif %}
-          set +x
-          echo "finished stage {{ stage_number }} {{ stage.name }}"
-          touch {{ status_dir }}/STAGE_{{ stage_number }}_COMPLETE
+          {{ exit_string.format(stage_completion_string, append)|indent(10) }}
         env:
         - name: KUBELINE_GIT_BRANCH
           value: "{{ config.branch }}"
@@ -100,9 +112,9 @@ spec:
           value: "{{ docker_image }}"
         volumeMounts:
         - name: work
-          mountPath: /work
-        - name: status
-          mountPath: {{ status_dir }}
+          mountPath: {{ work_dir }}
+        - name: logs
+          mountPath: {{ log_dir }}
         {%- if stage.type == 'docker-build' or 'docker-push' %}
         - name: docker-socket
           mountPath: /var/run/docker.sock
@@ -117,9 +129,11 @@ spec:
       {%- endfor %}
       volumes:
       - name: work
-        emptyDir: {}
-      - name: status
-        emptyDir: {}
+        emptyDir:
+          medium: Memory
+      - name: logs
+        emptyDir:
+          medium: Memory
       - name: docker-socket
         hostPath:
           path: /var/run/docker.sock
