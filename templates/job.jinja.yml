@@ -6,23 +6,23 @@
 {%- set stage_failure_string = 'KUBELINE_STAGE_FAILURE' %}
 {%- set init_string = '
 function fail() {{
-    echo "{0}" {1}
+    echo "{0}" >> {1} 2>&1
 }}
 trap fail EXIT
-until [ -f "{2}" ]; do
+until [ -f "{1}" ]; do
     sleep 1
 done
-if grep {0} {2}; then
+if grep "{0}" {1}; then
     echo "exiting due to previous stage failure..."
     exit 0
 fi
 echo "starting"
 '.strip() %}
-{%- set exit_string = 'echo "{0}" {1}\ntrap : 0' %}
+{%- set exit_string = 'echo "{0}" >> {1} 2>&1\ntrap : 0' %}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: "{{ job_name }}"
+  generateName: "kl-{{ job_name }}-"
   labels:
     app: kubeline
     type: build
@@ -50,7 +50,6 @@ spec:
       containers:
       {%- set stage_id = '0-clone' %}
       {%- set log_file = '{}/{}'.format(log_dir, stage_id) %}
-      {%- set append = '>> {} 2>&1'.format(log_file) %}
       - name: job-runner
         image: {{ job_runner_image }}
         imagePullPolicy: Always
@@ -73,10 +72,12 @@ spec:
         args:
         - -ceux
         - |
-          {{ init_string.format(stage_failure_string, append, log_file)|indent(10) }}
-          git clone {{ config.git_url }} . {{ append }}
-          git checkout {{ commit }} {{ append }}
-          {{ exit_string.format(stage_completion_string, append)|indent(10) }}
+          {{ init_string.format(stage_failure_string, log_file)|indent(10) }}
+          (
+            git clone -q {{ config.git_url }} .
+            git checkout -q {{ commit }}
+          ) >> {{ log_file }} 2>&1
+          {{ exit_string.format(stage_completion_string, log_file)|indent(10) }}
         volumeMounts:
         - name: work
           mountPath: {{ work_dir }}
@@ -85,29 +86,35 @@ spec:
       {%- for stage in stages %}
         {%- set stage_id = '{}-{}'.format(loop.index, stage.name) %}
         {%- set log_file = '{}/{}'.format(log_dir, stage_id) %}
-        {%- set append = '>> {} 2>&1'.format(log_file) %}
       - name: {{ stage_id }}
-        image: alpine:3.9
+        image: {% if stage.type == 'docker-build' or 'docker-push' %}alpine:3.9{% else %}{{ stage.image }}{% endif %}
         workingDir: {{ work_dir }}
         command: [sh]
         args:
         - -ceux
         - |
-          {{ init_string.format(stage_failure_string, append, log_file)|indent(10) }}
-
+          {{ init_string.format(stage_failure_string, log_file)|indent(10) }}
+          (
           {%- if stage.type == 'docker-build' %}
             {%- set docker_image = 'kubeline-{}:{}'.format(stage.name, short_commit) %}
-
-          docker build -t {{ docker_image }} -f {{ stage.dockerfile }} {{ stage.build_dir }} {{ append }}
+            docker build -t {{ docker_image }} -f {{ stage.dockerfile }} {{ stage.build_dir }}
 
           {%- elif stage.type == 'docker-push' %}
             {%- set docker_image = 'kubeline-{}:{}'.format(stage.from_stage, short_commit) %}
             {%- for tag in stage.tags %}
-          docker tag {{ docker_image }} "{{ stage.repo }}:{{ tag }}" {{ append }}
-          docker push "{{ stage.repo }}:{{ tag }}" {{ append }}
+            docker tag {{ docker_image }} "{{ stage.repo }}:{{ tag }}"
+            docker push "{{ stage.repo }}:{{ tag }}"
+            {%- endfor %}
+
+          {%- else %}
+            {%- set docker_image = '' %}
+            {%- for cmd in stage.commands %}
+            {{ cmd }}
             {%- endfor %}
           {%- endif %}
-          {{ exit_string.format(stage_completion_string, append)|indent(10) }}
+          ) >> {{ log_file }} 2>&1
+
+          {{ exit_string.format(stage_completion_string, log_file)|indent(10) }}
         env:
         - name: KUBELINE_GIT_BRANCH
           value: "{{ config.branch }}"
@@ -115,8 +122,10 @@ spec:
           value: "{{ commit }}"
         - name: KUBELINE_GIT_COMMIT_SHORT
           value: "{{ short_commit }}"
+        {%- if stage.type == 'docker-build' or 'docker-push' %}
         - name: KUBELINE_DOCKER_IMAGE
           value: "{{ docker_image }}"
+        {%- endif %}
         volumeMounts:
         - name: work
           mountPath: {{ work_dir }}

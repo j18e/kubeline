@@ -11,5 +11,6 @@ services:
     volumes:
     - ./config.yml:/config.yml:ro
     - ~/.kube/config:/root/.kube/config:ro
+    - ../templates:/work/templates:ro
     ports:
     - 8080:8080

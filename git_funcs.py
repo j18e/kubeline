@@ -97,7 +97,7 @@ def init_git_key(name, namespace):
         stream.write(git_keys['id_rsa'])
     chmod(git_key_path, stat.S_IREAD)
     if 'id_rsa.pub' in git_keys:
-        print('public key we\'ll be using:')
-        print(git_keys['id_rsa.pub'].strip())
+        print('public key to add to your git repos:' +
+              git_keys['id_rsa.pub'].strip())
     return True, None
 

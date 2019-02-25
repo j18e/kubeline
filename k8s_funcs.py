@@ -66,23 +66,30 @@ def get_recent_job(pipeline, namespace):
             results.append(item)
     return max(results, key=lambda r: r.status.start_time)
 
+def get_missing_fields(stage, required):
+    missing = ''
+    for field in required:
+        if field not in stage:
+            missing += f' {field}'
+    return missing.strip()
+
 def validate_pipeline_spec(kubeline_yaml):
+    valid_types = ['docker-build', 'docker-push', 'custom']
+    build_stages = []
+
     if not (type(kubeline_yaml) is dict and 'stages' in kubeline_yaml):
         err = 'pipeline spec must be dict containing "stages" key'
         return None, err
-    get_missing = lambda fields, stage: [f for f in fields if f not in stage]
-    build_stages = []
     for stage in kubeline_yaml['stages']:
         msg = f'stage {stage["name"]} - '
         if 'name' not in stage:
             return None, 'all stages require name field'
-        missing = get_missing(['name', 'type'], stage)
+        missing = get_missing_fields(stage, ['name', 'type'])
         if missing:
             err = msg + 'missing field(s) {missing}'
             return None, err
-        valid_types = ['docker-build', 'docker-push']
         if stage['type'] not in valid_types:
-            err = msg + 'type {stage["type"]} not valid'
+            err = msg + f'type {stage["type"]} not valid'
             return None, err
         if stage['type'] == 'docker-build':
             build_stages.append(stage['name'])
@@ -90,16 +97,24 @@ def validate_pipeline_spec(kubeline_yaml):
                 stage['build_dir'] = '.'
             if 'dockerfile' not in stage:
                 stage['dockerfile'] = 'Dockerfile'
-        if stage['type'] == 'docker-push':
-            missing = get_missing(['from_stage', 'repo', 'tags'], stage)
+        elif stage['type'] == 'docker-push':
+            missing = get_missing_fields(stage, ['from_stage', 'repo', 'tags'])
             if missing:
                 err = msg + f'missing field(s) {missing}'
                 return None, err
             if stage['from_stage'] not in build_stages:
-                err = msg + f'from_stage stage["from_stage"] not found'
+                err = msg + f'no previous stage named stage["from_stage"]'
                 return None, err
             if ':' in stage['repo']:
                 err = msg + 'repo field may not contain tags'
+                return None, err
+        elif stage['type'] == 'custom':
+            missing = get_missing_fields(stage, ['image', 'commands'])
+            if missing:
+                err = msg + f'missing field(s) {missing}'
+                return None, err
+            if type(stage['commands']) is not list:
+                err = msg + 'commands must be a list of commands'
                 return None, err
     return kubeline_yaml, None
 
