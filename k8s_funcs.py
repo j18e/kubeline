@@ -3,7 +3,8 @@ from jinja2.exceptions import UndefinedError
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from random import randint
-from os import environ, path
+from base64 import b64decode
+from os import environ, path, makedirs
 import yaml
 
 def Build(args, pipeline_name, config, iteration, commit, kubeline_yaml, namespace):
@@ -26,25 +27,29 @@ def Build(args, pipeline_name, config, iteration, commit, kubeline_yaml, namespa
     load_config()
     batch = client.BatchV1Api()
     if 'docker_secret' in config:
-        if not check_secret(config['docker_secret'], namespace):
+        if not get_secret(config['docker_secret'], namespace,
+                          secret_type='kubernetes.io/dockerconfigjson'):
             return False
     resp = batch.create_namespaced_job(namespace, body)
     return resp
 
-def check_secret(name, namespace):
+def get_secret(name, namespace, secret_type=None):
+    load_config()
     core = client.CoreV1Api()
-    secret_type = 'kubernetes.io/dockerconfigjson'
     msg = 'ERROR getting secret {} in namespace {} - '.format(name, namespace)
     try:
         resp = core.read_namespaced_secret(name, namespace)
-        assert resp.type == secret_type
     except ApiException:
         print(msg + 'could not locate secret')
         return False
-    except AssertionError:
-        print(msg + 'is not type ' + secret_type)
-        return False
-    return True
+    if secret_type:
+        if resp.type != secret_type:
+            print(msg + 'is not type ' + secret_type)
+            return False
+    result = {}
+    for key, value in resp.data.items():
+        result[key] = b64decode(value).decode('utf-8')
+    return result
 
 def get_recent_job(pipeline, namespace):
     load_config()
@@ -63,7 +68,7 @@ def get_recent_job(pipeline, namespace):
             results.append(item)
     return max(results, key=lambda r: r.status.start_time)
 
-def validate_spec(kubeline_yaml):
+def validate_pipeline_spec(kubeline_yaml):
     if not (type(kubeline_yaml) is dict and 'stages' in kubeline_yaml):
         print('ERROR - kubeline yaml file improperly formated')
         return False

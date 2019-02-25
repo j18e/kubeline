@@ -3,12 +3,13 @@ services:
   kubeline:
     build: ../
     command:
+    command:
+    - --check-frequency=15
+    - --namespace=kubeline
+    - --influxdb-host=influxdb
     - --config-file=/config.yml
-    - --state-file=tmp/state.yml
     volumes:
     - ./config.yml:/config.yml:ro
-    - ../tmp:/work/tmp
     - ~/.kube/config:/root/.kube/config:ro
-    - ~/.ssh:/root/.ssh:ro
     ports:
     - 8080:8080

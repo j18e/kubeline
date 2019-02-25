@@ -1,20 +1,18 @@
-##
-## check_frequency measured in seconds
-##
-check_frequency: 5
 pipelines:
   ipass:
     git_url: https://github.com/j18e/ci-test-1.git
-    docker_secret: kubeline-docker-creds
+    docker_secret: kubeline-docker
+  public-ssh:
+    git_url: git@github.com:j18e/ci-test-1.git
   ifailcheck:
     git_url: https://github.com/j18e/ci-test-wejfiowejf1.git
-    docker_secret: kubeline-docker-creds
+    docker_secret: kubeline-docker
   ifailconfig:
     git_url: https://github.com/j18e/ci-test-2.git
-    docker_secret: kubeline-docker-creds
+    docker_secret: kubeline-docker
   ifail:
     git_url: https://github.com/j18e/ci-test-3.git
-    docker_secret: kubeline-docker-creds
+    docker_secret: kubeline-docker
     ##
     ## if git_branch is not specified, master is assumed
     ##

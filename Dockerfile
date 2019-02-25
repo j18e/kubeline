@@ -15,7 +15,7 @@ RUN pip3 install --no-cache-dir --upgrade \
         gitpython \
         jinja2 \
         kubernetes \
-        prometheus_client
+        flask
 
 RUN apk del --purge \
         gcc \
