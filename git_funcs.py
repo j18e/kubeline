@@ -15,18 +15,18 @@ ssh_cmd = f'ssh -o StrictHostKeyChecking=no -i {git_key_path}'
 
 def check_http_auth(url):
     if not url.startswith('https://'):
-        return True
+        return True, None
     try:
         resp = get(url)
         resp.raise_for_status()
-        return True
+        return True, None
     except HTTPError:
-        print(f'ERROR {url} does not exist or requires auth')
-        return False
+        return False, f'{url} does not exist or requires auth'
 
 def get_commit(config):
-    if not check_http_auth(config['git_url']):
-        return None
+    http_check, err = check_http_auth(config['git_url'])
+    if err:
+        return False, err
     url = config['git_url']
     branch = config['branch']
     client = cmd.Git()
@@ -35,14 +35,11 @@ def get_commit(config):
             refs = client.ls_remote(url).split('\n')
         refs = [ref.split('\t')[0] for ref in refs
                if ref.split('\t')[1].split('/')[-1] == branch]
-    except GitCommandError as e:
-        msg = 'ERROR fetching most recent commit for {} on branch {}'
-        print(msg.format(url, branch))
-        print(e)
-        return None
+    except GitCommandError as err:
+        return False, err
     if len(refs) != 1:
-        return None
-    return refs[0]
+        return False, 'no commits found in branch {config["branch"]}'
+    return refs[0], None
 
 def clone_repo(url, git_ref, is_branch=False):
     if not check_http_auth(url):
@@ -65,45 +62,42 @@ def clone_repo(url, git_ref, is_branch=False):
     return repo_path, repo.head.commit.hexsha
 
 def get_pipeline_spec(config, commit=None):
-    msg = f'ERROR getting pipeline spec from {config["git_url"]}'
     url = config['git_url']
     if commit:
         repo_path, commit = clone_repo(url, commit)
     else:
         repo_path, commit = clone_repo(url, config['branch'], is_branch=True)
     if not repo_path:
-        print(msg)
-        return False, False
+        err = f'clone {url} at {config["branch"]} did not succeed'
+        return None, None, err
     full_path = repo_path + '/kubeline.yml'
     if not path.isfile(full_path):
-        msg = 'ERROR {} not found in {} at {}'
-        print(msg.format(full_path.split('/')[-1], url, commit))
+        err = f'did not find {file_name} in {config["git_url"]}'
         rmtree(repo_path)
-        return False, False
+        return None, commit, err
     with open(full_path, 'r') as stream:
         config = yaml.load(stream.read())
     rmtree(repo_path)
-    config = validate_pipeline_spec(config)
-    if not config:
-        print(msg)
-        return False, False
-    return config, commit
+    config, err = validate_pipeline_spec(config)
+    if err:
+        return None, commit, err
+    return config, commit, None
 
 def init_git_key(name, namespace):
     print(f'getting ssh keys from k8s secret {namespace}/{name}...')
-    git_keys = get_secret(name, namespace)
-    if not git_keys or 'id_rsa' not in git_keys:
-        print(f'ERROR getting keys at {namespace}/{name}')
-        return False
+    git_keys, err = get_secret(name, namespace)
+    if err:
+        return None, err
+    if 'id_rsa' not in git_keys:
+        return None, 'id_rsa not found in secret {namespace}/{name}'
     if not path.exists(git_key_dir):
         makedirs(git_key_dir)
         chmod(git_key_dir, stat.S_IRWXU)
-    print('writing key', git_key_path)
     with open(git_key_path, 'w') as stream:
         stream.write(git_keys['id_rsa'])
     chmod(git_key_path, stat.S_IREAD)
     if 'id_rsa.pub' in git_keys:
         print('public key we\'ll be using:')
-        print(git_keys['id_rsa.pub'])
-    return True
+        print(git_keys['id_rsa.pub'].strip())
+    return True, None
 

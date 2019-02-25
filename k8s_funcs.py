@@ -27,29 +27,27 @@ def Build(args, pipeline_name, config, iteration, commit, kubeline_yaml, namespa
     load_config()
     batch = client.BatchV1Api()
     if 'docker_secret' in config:
-        if not get_secret(config['docker_secret'], namespace,
-                          secret_type='kubernetes.io/dockerconfigjson'):
-            return False
+        secret, err = get_secret(config['docker_secret'], namespace,
+            secret_type='kubernetes.io/dockerconfigjson')
+        if err:
+            return None, err
     resp = batch.create_namespaced_job(namespace, body)
-    return resp
+    return resp, None
 
 def get_secret(name, namespace, secret_type=None):
     load_config()
     core = client.CoreV1Api()
-    msg = 'ERROR getting secret {} in namespace {} - '.format(name, namespace)
     try:
         resp = core.read_namespaced_secret(name, namespace)
     except ApiException:
-        print(msg + 'could not locate secret')
-        return False
+        return None, f'could not locate secret {namespace}/{name}'
     if secret_type:
         if resp.type != secret_type:
-            print(msg + 'is not type ' + secret_type)
-            return False
+            return None, f'secret {namespace}/{name} is not type {secret_type}'
     result = {}
     for key, value in resp.data.items():
         result[key] = b64decode(value).decode('utf-8')
-    return result
+    return result, None
 
 def get_recent_job(pipeline, namespace):
     load_config()
@@ -70,20 +68,22 @@ def get_recent_job(pipeline, namespace):
 
 def validate_pipeline_spec(kubeline_yaml):
     if not (type(kubeline_yaml) is dict and 'stages' in kubeline_yaml):
-        print('ERROR - kubeline yaml file improperly formated')
-        return False
+        err = 'pipeline spec must be dict containing "stages" key'
+        return None, err
     get_missing = lambda fields, stage: [f for f in fields if f not in stage]
     build_stages = []
     for stage in kubeline_yaml['stages']:
-        msg = 'ERROR in stage {} - '.format(stage.get('name'))
+        msg = f'stage {stage["name"]} - '
+        if 'name' not in stage:
+            return None, 'all stages require name field'
         missing = get_missing(['name', 'type'], stage)
         if missing:
-            print(msg + 'missing field(s) ', missing)
-            return False
+            err = msg + 'missing field(s) {missing}'
+            return None, err
         valid_types = ['docker-build', 'docker-push']
         if stage['type'] not in valid_types:
-            print(msg + 'invalid type')
-            return False
+            err = msg + 'type {stage["type"]} not valid'
+            return None, err
         if stage['type'] == 'docker-build':
             build_stages.append(stage['name'])
             if 'build_dir' not in stage:
@@ -93,15 +93,15 @@ def validate_pipeline_spec(kubeline_yaml):
         if stage['type'] == 'docker-push':
             missing = get_missing(['from_stage', 'repo', 'tags'], stage)
             if missing:
-                print(msg + 'missing field(s) ', missing)
-                return False
+                err = msg + f'missing field(s) {missing}'
+                return None, err
             if stage['from_stage'] not in build_stages:
-                print(msg + 'from_stage', stage['from_stage'], 'not found')
-                return False
+                err = msg + f'from_stage stage["from_stage"] not found'
+                return None, err
             if ':' in stage['repo']:
-                print(msg + 'repo field may not contain tags')
-                return False
-    return kubeline_yaml
+                err = msg + 'repo field may not contain tags'
+                return None, err
+    return kubeline_yaml, None
 
 def get_namespace():
     namespace = None

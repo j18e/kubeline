@@ -45,18 +45,23 @@ def load_pipelines(pipelines=None):
                  'commits': {}} for name in config_file}
 
     for name in pipelines:
+        err = None
         job = get_recent_job(name, namespace)
         if job and 'iteration' in job.metadata.labels:
             pipelines[name]['iteration'] = int(job.metadata.labels['iteration'])
         if job and 'commit' in job.metadata.labels:
             commit = job.metadata.labels['commit']
         else:
-            commit = get_commit(pipelines[name]['config'])
-        if not commit:
-            print(f'ERROR getting most recent commit for {name}')
+            commit, err = get_commit(pipelines[name]['config'])
+        if err:
+            print(f'ERROR/init {name}: {err}')
             continue
-        pipeline_spec, _ = get_pipeline_spec(pipelines[name]['config'],
+        pipelines[name]['commits'][commit] = None
+        pipeline_spec, _, err = get_pipeline_spec(pipelines[name]['config'],
             commit=commit)
+        if err:
+            print(f'ERROR/init {name}: {err}')
+            continue
         pipelines[name]['commits'][commit] = pipeline_spec
     print('pipeline state successfully initialized')
     return pipelines
@@ -73,14 +78,16 @@ def commit_updater():
         print('CHECK for new commits...')
         start_time = now()
         for name in pipelines:
-            commit = get_commit(pipelines[name]['config'])
-            if not commit:
-                print(f'ERROR checking {name}')
+            commit, err = get_commit(pipelines[name]['config'])
+            if err:
+                pipelines[name]['check_error'] = True
+                print(f'ERROR/check {name}: {err}')
+                continue
             if commit in pipelines[name]['commits']:
                 continue
-            pipeline_spec, _ = get_pipeline_spec(pipelines[name]['config'], commit=commit)
-            if not pipeline_spec:
-                print(f'ERROR pipeline spec in {name}')
+            pipeline_spec, _, err = get_pipeline_spec(pipelines[name]['config'], commit=commit)
+            if err:
+                print(f'ERROR/check: pipeline spec in {name}')
                 continue
             pipelines[name]['commits'][commit] = pipeline_spec
             print(f'ADD {name} to queue')
@@ -104,18 +111,28 @@ def queue_watcher():
         commit = job[1]
         pipeline = pipelines[name]
         if not commit:
-            commit = get_commit(pipeline['config'])
-        print(f'TRIGGER {name} at {commit}')
-        if commit not in pipeline['commits']:
-            pipeline_spec, _ = get_pipeline_spec(pipelines[name]['config'], commit=commit)
-            pipelines[name][commit] = pipeline_spec
-        else:
+            commit, err = get_commit(pipeline['config'])
+            if err:
+                pipelines[name]['check_error'] = True
+                print(f'ERROR getting commit for {name}: {err}')
+                continue
+        if commit in pipeline['commits']:
             pipeline_spec = pipeline['commits'][commit]
-        resp = Build(args, name, pipeline['config'], pipeline['iteration']+1,
-                     commit, pipeline_spec, namespace)
-        if not resp:
-            print(f'ERROR triggering {name}')
+            if not pipeline_spec:
+                print(f'ERROR/trigger {name} at {commit}: no pipeline spec')
+                continue
+        else:
+            pipeline_spec, _, err = get_pipeline_spec(pipelines[name]['config'], commit=commit)
+            pipelines[name][commit] = pipeline_spec
+            if err:
+                print(f'ERROR/trigger {name} at {commit}: {err}')
+                continue
+        resp, err = Build(args, name, pipeline['config'],
+            pipeline['iteration']+1, commit, pipeline_spec, namespace)
+        if err:
+            print(f'ERROR/trigger {name}: {err}')
             continue
+        print(f'TRIGGER {name} at {commit}')
         pipelines[name]['iteration'] += 1
 
 
@@ -134,14 +151,18 @@ def trigger_build(pipeline):
     if pipeline not in pipelines:
         msg = f'ERROR pipeline "{pipeline}" not found\n'
         return msg, 404
+    if pipelines[pipeline].get('check_error') is True:
+        msg = f'ERROR git check error in {pipeline}'
+        return msg, 500
     queue.append((pipeline, None))
     return f'{pipeline} added to queue'
 
 if __name__ == '__main__':
     args = docopt(__doc__)
     namespace = args['--namespace'] or get_namespace() or 'default'
-    if not init_git_key(args['--git-key-secret'], namespace):
-        print('ERROR getting git key. Exiting...')
+    _, err = init_git_key(args['--git-key-secret'], namespace)
+    if err:
+        print(f'ERROR/ssh: {err}. Exiting...')
         exit()
     pipelines = load_pipelines()
     queue = []
