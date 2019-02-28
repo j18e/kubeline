@@ -74,11 +74,17 @@ spec:
         - |
           {{ init_string.format(stage_failure_string, log_file)|indent(10) }}
           (
+            mkdir -p ~/.ssh
+            cp /git-key/id_rsa ~/.ssh/
+            chown -R root ~/.ssh
+            chmod -R 700 ~/.ssh
             git clone -q {{ config.git_url }} .
             git checkout -q {{ commit }}
           ) >> {{ log_file }} 2>&1
           {{ exit_string.format(stage_completion_string, log_file)|indent(10) }}
         volumeMounts:
+        - name: git-key
+          mountPath: /git-key
         - name: work
           mountPath: {{ work_dir }}
         - name: logs
@@ -156,6 +162,9 @@ spec:
       - name: docker-binary
         hostPath:
           path: /usr/bin/docker
+      - name: git-key
+        secret:
+          secretName: kubeline-git-key
       {%- if 'docker_secret' in config %}
       - name: docker-creds
         secret:

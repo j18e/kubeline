@@ -132,7 +132,7 @@ def queue_watcher():
         if err:
             print(f'ERROR/trigger {name}: {err}')
             continue
-        print(f'TRIGGER {name} at {commit}')
+        print(f'TRIGGERED {name} at {commit}')
         pipelines[name]['iteration'] += 1
 
 
