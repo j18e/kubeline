@@ -2,9 +2,12 @@
 {%- set job_name = pipeline_name + '-' + iteration|string %}
 {%- set work_dir = '/kubeline-work' %}
 {%- set log_dir = '/kubeline-logs' %}
-{%- set stage_completion_string = 'KUBELINE_STAGE_FINISHED' %}
-{%- set stage_failure_string = 'KUBELINE_STAGE_FAILURE' %}
+{%- set job_vars_file = '{}/kubeline-job-vars.sh'.format(log_dir) %}
+{%- set stage_start = 'KUBELINE_STAGE_STARTING' %}
+{%- set stage_success = 'KUBELINE_STAGE_FINISHED' %}
+{%- set stage_failure = 'KUBELINE_STAGE_FAILURE' %}
 {%- set init_string = '
+source {{ job_vars_file }}
 function fail() {{
     echo "{0}" >> {1} 2>&1
 }}
@@ -58,8 +61,9 @@ spec:
         - --job={{ job_name }}
         - --stages={% for stage in stages %}{{ loop.index }}-{{ stage.name }},{% endfor %}{{ stage_id }}
         - --log-dir={{ log_dir }}
-        - --completion-string={{ stage_completion_string }}
-        - --failure-string={{ stage_failure_string }}
+        - --start-string={{ stage_start }}
+        - --success-string={{ stage_success }}
+        - --failure-string={{ stage_failure }}
         - --influxdb-host={{ influxdb_host }}
         - --influxdb-db={{ influxdb_db }}
         volumeMounts:
@@ -72,16 +76,16 @@ spec:
         args:
         - -ceux
         - |
-          {{ init_string.format(stage_failure_string, log_file)|indent(10) }}
+          {{ init_string.format(stage_failure, log_file)|indent(10) }}
+          mkdir -p -m 700 ~/.ssh
+          cp /git-key/id_rsa ~/.ssh/
+          chmod 700 ~/.ssh/id_rsa
+          export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no"
           (
-            mkdir -p ~/.ssh
-            cp /git-key/id_rsa ~/.ssh/
-            chown -R root ~/.ssh
-            chmod -R 700 ~/.ssh
-            GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" git clone -q {{ config.git_url }} .
+            git clone -q {{ config.git_url }} .
             git checkout -q {{ commit }}
           ) >> {{ log_file }} 2>&1
-          {{ exit_string.format(stage_completion_string, log_file)|indent(10) }}
+          {{ exit_string.format(stage_success, log_file)|indent(10) }}
         volumeMounts:
         - name: git-key
           mountPath: /git-key
@@ -99,7 +103,7 @@ spec:
         args:
         - -ceux
         - |
-          {{ init_string.format(stage_failure_string, log_file)|indent(10) }}
+          {{ init_string.format(stage_failure, log_file)|indent(10) }}
           (
           {%- if stage.type == 'docker-build' %}
             {%- set docker_image = 'kubeline-{}:{}'.format(stage.name, short_commit) %}
@@ -120,7 +124,7 @@ spec:
           {%- endif %}
           ) >> {{ log_file }} 2>&1
 
-          {{ exit_string.format(stage_completion_string, log_file)|indent(10) }}
+          {{ exit_string.format(stage_success, log_file)|indent(10) }}
         env:
         - name: KUBELINE_GIT_BRANCH
           value: "{{ config.branch }}"
@@ -164,7 +168,7 @@ spec:
           path: /usr/bin/docker
       - name: git-key
         secret:
-          secretName: kubeline-git-key
+          secretName: {{ git_key_secret }}
       {%- if 'docker_secret' in config %}
       - name: docker-creds
         secret:

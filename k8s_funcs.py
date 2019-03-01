@@ -20,7 +20,8 @@ def Build(args, pipeline_name, config, iteration, commit, kubeline_yaml, namespa
         'commit': commit,
         'stages': kubeline_yaml['stages'],
         'influxdb_host': args['--influxdb-host'],
-        'influxdb_db': args['--influxdb-db']
+        'influxdb_db': args['--influxdb-db'],
+        'git_key_secret': args['--git-key-secret']
     }
     body = template.render(build_spec)
     body = yaml.load(body)
