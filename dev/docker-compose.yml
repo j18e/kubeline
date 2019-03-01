@@ -7,7 +7,9 @@ services:
     - --check-frequency=15
     - --namespace=kubeline
     - --influxdb-host=influxdb
+    - --influxdb-db=kubeline
     - --config-file=/config.yml
+    - --job-runner-image=j18e/job-runner:0.1.4
     volumes:
     - ./config.yml:/config.yml:ro
     - ~/.kube/config:/root/.kube/config:ro

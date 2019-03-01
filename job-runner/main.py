@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 
 """
-Usage: main.py [options]
-           --pipeline=<name> --job=<name>
-           --stages=<names> --log-dir=<dir>
-           --start-string=<string>
-           --success-string=<string>
-           --failure-string=<string>
-           --influxdb-host=<host>
-           --influxdb-db=<name>
+Usage: main.py [options] PIPELINE JOB (--stages=<names>) (--log-dir=<dir>)
+           (--start=<string>) (--success=<string>) (--failure=<string>)
+           (--influxdb-host=<host>) (--influxdb-db=<name>)
 
 Starting with the first provided stage name, Kfollow will provision a log file
 named for the stage itself, in the --log-dir directory. Kfollow will tail the
@@ -17,9 +12,10 @@ It will then assume the stage is complete, and move onto the next stage.
 
 Options:
   -h --help                             show this help text
-  --pipeline=<name>                     name of the pipeline (eg: myapp)
-  --job=<name>                          name of the job (eg: myapp-1)
   --stages=<names>                      comma separated list of stage names
+  --start=<string>                      string to signal stage start
+  --success=<string>                    string to signal stage success
+  --failure=<string>                    string to signal stage failure
   --influxdb-db=<name>                  influxdb database to be written to
   --influxdb-host=<host>                hostname of influxdb server
 """
@@ -36,9 +32,9 @@ format_metric = lambda metric, tags, fields: [{'measurement': metric,
     'tags': tags, 'fields': fields}]
 
 def follow_file(client, tags, file_path, stage_success=None):
-    sig_start = args['--start-string']
-    sig_success = args['--success-string']
-    sig_failed = args['--failure-string']
+    sig_start = args['--start']
+    sig_success = args['--success']
+    sig_failed = args['--failure']
     with open(file_path, 'w') as stream:
         if stage_success is False:
             print('failing stage due to previous failure...')
@@ -68,8 +64,8 @@ def follow_file(client, tags, file_path, stage_success=None):
 def main():
     idb_host = args['--influxdb-host']
     database = args['--influxdb-db']
-    pipeline = args['--pipeline']
-    job = args['--job']
+    pipeline = args['PIPELINE']
+    job = args['JOB']
     log_dir = args['--log-dir']
     client = InfluxDBClient(host=idb_host, database=database)
 

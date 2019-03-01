@@ -144,7 +144,7 @@ def not_found(error):
 def not_found(error):
     return '500 internal server error\n', 500
 
-@app.route('/api/build/<pipeline>', methods=['POST'])
+@app.route('/api/run/<pipeline>', methods=['POST'])
 def trigger_build(pipeline):
     global queue
     global pipelines

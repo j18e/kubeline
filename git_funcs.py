@@ -1,7 +1,8 @@
 from git import Repo, cmd
 from git.exc import GitCommandError
 from k8s_funcs import validate_pipeline_spec, get_secret
-from os import path, environ, makedirs, chmod
+from os import environ, makedirs, chmod
+import os.path
 from random import randint
 from requests import get
 from requests.exceptions import HTTPError
@@ -42,40 +43,41 @@ def get_commit(config):
     return refs[0], None
 
 def clone_repo(url, git_ref, is_branch=False):
+    msg = f'{url} at {git_ref}'
     if not check_http_auth(url):
-        return False, False
+        return False, False, f'{msg}: cannot clone authenticated http repos'
     repo_dir = str(randint(1000, 9999))
     repo_path = 'tmp/repos/' + repo_dir
     try:
         repo = Repo.clone_from(url, repo_path, env={'GIT_SSH_COMMAND': ssh_cmd})
         if is_branch:
             if repo.active_branch == git_ref:
-                return repo_path, repo.head.commit.hexsha
+                return repo_path, repo.head.commit.hexsha, None
             ref_names = [ref.name.split('/')[-1] for ref in repo.refs]
             git_ref = repo.refs[ref_names.index(git_ref)]
         head = repo.create_head(repo_path, git_ref)
         repo.head.reference = head
         repo.head.reset(index=True, working_tree=True)
     except GitCommandError as e:
-        print(f'ERROR cloning {url} and checking out {git_ref} {e}')
-        return False, False
-    return repo_path, repo.head.commit.hexsha
+        return None, None, f'{msg}: {e}'
+    except ValueError as e:
+        return None, None, f'{msg}: {e}'
+    return repo_path, repo.head.commit.hexsha, None
 
 def get_pipeline_spec(config, commit=None):
+    file_name = 'kubeline.yml'
     url = config['git_url']
     if commit:
-        repo_path, commit = clone_repo(url, commit)
+        repo_path, commit, err = clone_repo(url, commit)
     else:
-        repo_path, commit = clone_repo(url, config['branch'], is_branch=True)
-    if not repo_path:
-        err = f'clone {url} at {config["branch"]} did not succeed'
+        repo_path, commit, err = clone_repo(url, config['branch'], is_branch=True)
+    if err:
         return None, None, err
-    full_path = repo_path + '/kubeline.yml'
-    if not path.isfile(full_path):
-        err = f'did not find {file_name} in {config["git_url"]}'
+    path = f'{repo_path}/{file_name}'
+    if not os.path.isfile(path):
         rmtree(repo_path)
-        return None, commit, err
-    with open(full_path, 'r') as stream:
+        return None, commit, f'did not find {file_name} in {url}'
+    with open(path, 'r') as stream:
         config = yaml.load(stream.read())
     rmtree(repo_path)
     config, err = validate_pipeline_spec(config)
@@ -90,7 +92,7 @@ def init_git_key(name, namespace):
         return None, err
     if 'id_rsa' not in git_keys:
         return None, 'id_rsa not found in secret {namespace}/{name}'
-    if not path.exists(git_key_dir):
+    if not os.path.exists(git_key_dir):
         makedirs(git_key_dir)
         chmod(git_key_dir, stat.S_IRWXU)
     with open(git_key_path, 'w') as stream:

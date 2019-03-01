@@ -2,12 +2,10 @@
 {%- set job_name = pipeline_name + '-' + iteration|string %}
 {%- set work_dir = '/kubeline-work' %}
 {%- set log_dir = '/kubeline-logs' %}
-{%- set job_vars_file = '{}/kubeline-job-vars.sh'.format(log_dir) %}
 {%- set stage_start = 'KUBELINE_STAGE_STARTING' %}
 {%- set stage_success = 'KUBELINE_STAGE_FINISHED' %}
 {%- set stage_failure = 'KUBELINE_STAGE_FAILURE' %}
 {%- set init_string = '
-source {{ job_vars_file }}
 function fail() {{
     echo "{0}" >> {1} 2>&1
 }}
@@ -57,13 +55,13 @@ spec:
         image: {{ job_runner_image }}
         imagePullPolicy: Always
         args:
-        - --pipeline={{ pipeline_name }}
-        - --job={{ job_name }}
+        - {{ pipeline_name }}
+        - {{ job_name }}
         - --stages={% for stage in stages %}{{ loop.index }}-{{ stage.name }},{% endfor %}{{ stage_id }}
         - --log-dir={{ log_dir }}
-        - --start-string={{ stage_start }}
-        - --success-string={{ stage_success }}
-        - --failure-string={{ stage_failure }}
+        - --start={{ stage_start }}
+        - --success={{ stage_success }}
+        - --failure={{ stage_failure }}
         - --influxdb-host={{ influxdb_host }}
         - --influxdb-db={{ influxdb_db }}
         volumeMounts:
