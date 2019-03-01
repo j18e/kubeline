@@ -124,6 +124,8 @@ spec:
 
           {{ exit_string.format(stage_success, log_file)|indent(10) }}
         env:
+        - name: KUBELINE_ITERATION
+          value: "{{ iteration }}"
         - name: KUBELINE_GIT_BRANCH
           value: "{{ config.branch }}"
         - name: KUBELINE_GIT_COMMIT
