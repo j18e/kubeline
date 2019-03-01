@@ -17,5 +17,5 @@ stages:
   repo: j18e/kubeline
   tags:
   - latest
-  - $BRANCH-$KUBELINE_ITERATION
+  - $KUBELINE_GIT_BRANCH-$KUBELINE_ITERATION
   - $KUBELINE_COMMIT_SHA_SHORT
