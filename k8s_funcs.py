@@ -7,16 +7,15 @@ from base64 import b64decode
 from os import environ, path, makedirs
 import yaml
 
-def Build(args, pipeline_name, config, iteration, commit, kubeline_yaml, namespace):
+def Build(args, pipeline, config, commit, kubeline_yaml, namespace):
     template_file = 'templates/job.jinja.yml'
     env = Environment(loader=FileSystemLoader('.'), undefined=StrictUndefined)
     template = env.get_template(template_file)
 
     build_spec = {
         'job_runner_image': args['--job-runner-image'],
-        'pipeline_name': pipeline_name,
+        'pipeline': pipeline,
         'config': config,
-        'iteration': iteration,
         'commit': commit,
         'stages': kubeline_yaml['stages'],
         'influxdb_host': args['--influxdb-host'],
@@ -49,23 +48,6 @@ def get_secret(name, namespace, secret_type=None):
     for key, value in resp.data.items():
         result[key] = b64decode(value).decode('utf-8')
     return result, None
-
-def get_recent_job(pipeline, namespace):
-    load_config()
-    batch = client.BatchV1Api()
-    labels = 'app=kubeline,pipeline={}'.format(pipeline)
-    limit=20
-    resp = batch.list_namespaced_job(namespace, label_selector=labels,
-                                     limit=limit)
-    if len(resp.items) == 0:
-        return None
-    results = [item for item in resp.items]
-    while resp.metadata._continue:
-        resp = batch.list_namespaced_job(namespace, label_selector=labels,
-            limit=limit, _continue=resp.metadata._continue)
-        for item in resp.items:
-            results.append(item)
-    return max(results, key=lambda r: r.status.start_time)
 
 def get_missing_fields(stage, required):
     missing = ''

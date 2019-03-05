@@ -1,17 +1,20 @@
 version: '3'
 services:
-#  log-follower:
-#    build: ../
-#    depends_on: ["influxdb"]
-#    command:
-#    - --pipeline=testy
-#    - --stages=1-build,2-push
-#    - --log-dir=/logs
-#    - --stage-completion-string=SUCCEEDED
-#    - --stage-failure-string=FAILED
-#    - --influxdb-host=influxdb
-#    volumes:
-#    - logs:/logs
+  job-runner:
+    build: ../
+    depends_on: ["influxdb"]
+    command:
+    - testline
+    - --stages=1-build,2-push
+    - --start=STARTED
+    - --success=WON
+    - --failure=LOST
+    - --influxdb-host=influxdb
+    - --influxdb-db=kubeline
+    - --time-limit=3600
+    - --log-dir=/logs
+    volumes:
+    - logs:/logs
   influxdb:
     image: "influxdb:1.5"
     environment:

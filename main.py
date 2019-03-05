@@ -21,7 +21,7 @@ from datetime import datetime
 from docopt import docopt
 from flask import Flask
 from git_funcs import get_pipeline_spec, get_commit, init_git_key
-from k8s_funcs import Build, get_recent_job, get_namespace
+from k8s_funcs import Build, get_namespace
 from threading import Thread
 from time import sleep
 import yaml
@@ -41,18 +41,12 @@ def load_pipelines(pipelines=None):
     for name in config_file:
         if 'branch' not in config_file[name]:
             config_file[name]['branch'] = 'master'
-    pipelines = {name: {'config': config_file[name], 'iteration': 0,
+    pipelines = {name: {'config': config_file[name],
                  'commits': {}} for name in config_file}
 
     for name in pipelines:
         err = None
-        job = get_recent_job(name, namespace)
-        if job and 'iteration' in job.metadata.labels:
-            pipelines[name]['iteration'] = int(job.metadata.labels['iteration'])
-        if job and 'commit' in job.metadata.labels:
-            commit = job.metadata.labels['commit']
-        else:
-            commit, err = get_commit(pipelines[name]['config'])
+        commit, err = get_commit(pipelines[name]['config'])
         if err:
             print(f'ERROR/init {name}: {err}')
             continue
@@ -128,13 +122,11 @@ def queue_watcher():
                 print(f'ERROR/trigger {name} at {commit}: {err}')
                 continue
         resp, err = Build(args, name, pipeline['config'],
-            pipeline['iteration']+1, commit, pipeline_spec, namespace)
+            commit, pipeline_spec, namespace)
         if err:
             print(f'ERROR/trigger {name}: {err}')
             continue
         print(f'TRIGGERED {name} at {commit}')
-        pipelines[name]['iteration'] += 1
-
 
 @app.errorhandler(404)
 def not_found(error):

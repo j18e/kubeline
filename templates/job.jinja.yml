@@ -1,7 +1,8 @@
 {%- set short_commit = commit[:6] %}
-{%- set job_name = pipeline_name + '-' + iteration|string %}
 {%- set work_dir = '/kubeline-work' %}
 {%- set log_dir = '/kubeline-logs' %}
+{%- set env_vars_file = 'kubeline-vars.sh' %}
+{%- set env_vars_path = log_dir + '/' + env_vars_file %}
 {%- set stage_start = 'KUBELINE_STAGE_STARTING' %}
 {%- set stage_success = 'KUBELINE_STAGE_FINISHED' %}
 {%- set stage_failure = 'KUBELINE_STAGE_FAILURE' %}
@@ -23,12 +24,11 @@ echo "starting"
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: "kl-{{ job_name }}-"
+  generateName: "kl-{{ pipeline }}-"
   labels:
     app: kubeline
-    type: build
-    pipeline: "{{ pipeline_name }}"
-    iteration: "{{ iteration }}"
+    type: job
+    pipeline: "{{ pipeline }}"
     commit: "{{ commit }}"
     commit_short: "{{ short_commit }}"
 spec:
@@ -39,14 +39,12 @@ spec:
     metadata:
       labels:
         app: kubeline
-        type: build
-        pipeline: "{{ pipeline_name }}"
-        iteration: "{{ iteration }}"
+        type: job
+        pipeline: "{{ pipeline }}"
         commit: "{{ commit }}"
         commit_short: "{{ short_commit }}"
     spec:
-      # don't let the job run longer than 1 hour
-      activeDeadlineSeconds: 3600
+      activeDeadlineSeconds: 4000
       restartPolicy: Never
       containers:
       {%- set stage_id = '0-clone' %}
@@ -55,15 +53,16 @@ spec:
         image: {{ job_runner_image }}
         imagePullPolicy: Always
         args:
-        - {{ pipeline_name }}
-        - {{ job_name }}
+        - "{{ pipeline }}"
         - --stages={% for stage in stages %}{{ loop.index }}-{{ stage.name }},{% endfor %}{{ stage_id }}
         - --log-dir={{ log_dir }}
+        - --env-vars-file=kubeline-vars.sh
         - --start={{ stage_start }}
         - --success={{ stage_success }}
         - --failure={{ stage_failure }}
         - --influxdb-host={{ influxdb_host }}
         - --influxdb-db={{ influxdb_db }}
+        - --time-limit=3600
         volumeMounts:
         - name: logs
           mountPath: {{ log_dir }}
@@ -102,6 +101,7 @@ spec:
         - -ceux
         - |
           {{ init_string.format(stage_failure, log_file)|indent(10) }}
+          source {{ env_vars_path }}
           (
           {%- if stage.type == 'docker-build' %}
             {%- set docker_image = 'kubeline-{}:{}'.format(stage.name, short_commit) %}
@@ -124,8 +124,6 @@ spec:
 
           {{ exit_string.format(stage_success, log_file)|indent(10) }}
         env:
-        - name: KUBELINE_ITERATION
-          value: "{{ iteration }}"
         - name: KUBELINE_GIT_BRANCH
           value: "{{ config.branch }}"
         - name: KUBELINE_GIT_COMMIT

@@ -9,7 +9,7 @@ services:
     - --influxdb-host=influxdb
     - --influxdb-db=kubeline
     - --config-file=/config.yml
-    - --job-runner-image=j18e/job-runner:0.1.4
+    - --job-runner-image=j18e/job-runner:0.1.6
     volumes:
     - ./config.yml:/config.yml:ro
     - ~/.kube/config:/root/.kube/config:ro
