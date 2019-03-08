@@ -113,6 +113,7 @@ spec:
             docker tag {{ docker_image }} "{{ stage.repo }}:{{ tag }}"
             docker push "{{ stage.repo }}:{{ tag }}"
             {%- endfor %}
+            docker rmi {{ docker_image }}
 
           {%- else %}
             {%- set docker_image = '' %}
