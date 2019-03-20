@@ -39,7 +39,7 @@ def get_commit(config):
     except GitCommandError as err:
         return False, err
     if len(refs) != 1:
-        return False, 'no commits found in branch {config["branch"]}'
+        return False, f'no commits found in branch {config["branch"]}'
     return refs[0], None
 
 def clone_repo(url, git_ref, is_branch=False):
