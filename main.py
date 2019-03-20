@@ -21,6 +21,7 @@ from datetime import datetime
 from docopt import docopt
 from flask import Flask
 from git_funcs import get_pipeline_spec, get_commit, init_git_key
+from hashlib import md5
 from k8s_funcs import Build, get_namespace
 from threading import Thread
 from time import sleep
@@ -29,6 +30,11 @@ import yaml
 app = Flask(__name__)
 
 now = lambda : int(datetime.now().timestamp())
+
+def check_config_file():
+    with open(args['--config-file'], 'rb') as stream:
+        checksum = md5(stream.read())
+    return checksum.hexdigest()
 
 def load_pipelines(pipelines=None):
     global namespace
@@ -63,14 +69,17 @@ def load_pipelines(pipelines=None):
 def commit_updater():
     global args
     global pipelines
+    global config_checksum
     global queue
     global namespace
     check_frequency = int(args['--check-frequency'])
     print(f'checking repos every {check_frequency} seconds...')
 
     while True:
-        print('CHECK for new commits...')
         start_time = now()
+        if config_checksum != check_config_file():
+            pipelines = load_pipelines()
+            config_checksum = check_config_file()
         for name in pipelines:
             commit, err = get_commit(pipelines[name]['config'])
             if err:
@@ -157,6 +166,7 @@ if __name__ == '__main__':
         print(f'ERROR/ssh: {err}. Exiting...')
         exit()
     pipelines = load_pipelines()
+    config_checksum = check_config_file()
     queue = []
     commit_updater_thread = Thread(target=commit_updater)
     commit_updater_thread.start()
