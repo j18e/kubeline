@@ -93,8 +93,14 @@ spec:
       {%- for stage in stages %}
         {%- set stage_id = '{}-{}'.format(loop.index, stage.name) %}
         {%- set log_file = '{}/{}'.format(log_dir, stage_id) %}
-      - name: {{ stage_id }}
-        image: {% if stage.type == 'docker-build' or 'docker-push' %}alpine:3.9{% else %}{{ stage.image }}{% endif %}
+      - name: {{ stage_id | replace("_","-") }}
+        {%- if stage.type == 'docker-build' or 'docker-push'%}
+        image: alpine:3.9
+        {%- elif stage.type == 'docker-compose' %}
+        image: docker/compose:1.24.0
+        {%- else %}
+        image: {{ stage.image }}
+        {%- endif %}
         workingDir: {{ work_dir }}
         command: [sh]
         args:
@@ -115,6 +121,13 @@ spec:
             {%- endfor %}
             docker rmi {{ docker_image }}
 
+          {%- elif stage.type == 'docker-compose' %}
+            if ! docker-compose -f {{ stage.compose_file }} run --rm {{ stage.service_name }}; then
+              docker-compose -f {{ stage.compose_file }} down
+              false
+            fi
+            docker-compose -f {{ stage.compose_file }} down
+
           {%- else %}
             {%- set docker_image = '' %}
             {%- for cmd in stage.commands %}
@@ -131,7 +144,7 @@ spec:
           value: "{{ commit }}"
         - name: KUBELINE_GIT_COMMIT_SHORT
           value: "{{ short_commit }}"
-        {%- if stage.type == 'docker-build' or 'docker-push' %}
+        {%- if stage.type == 'docker-build' or 'docker-push' or 'docker-compose' %}
         - name: KUBELINE_DOCKER_IMAGE
           value: "{{ docker_image }}"
         {%- endif %}
@@ -140,7 +153,7 @@ spec:
           mountPath: {{ work_dir }}
         - name: logs
           mountPath: {{ log_dir }}
-        {%- if stage.type == 'docker-build' or 'docker-push' %}
+        {%- if stage.type == 'docker-build' or 'docker-push' or 'docker-compose' %}
         - name: docker-socket
           mountPath: /var/run/docker.sock
         - name: docker-binary
