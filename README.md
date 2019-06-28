@@ -61,5 +61,55 @@ kubectl create secret docker-registry kubeline-docker-test-1 \
     --docker-server=https://index.docker.io/v1 # not necessary if authenticating to Docker hub
 ```
 
+## Pipeline configuration
+Kubeline pipelines are configured through a `kubeline.yml` file at the root
+level of your Git repository. The pipeline spec is largely comprised of stages
+which can be of differing types (detailed below). The main body will start as
+follows:
+```
+stages: []
+```
+with the value of `stages` being a list of stages. The fields common to each
+stage are as follows:
+- `name`: the name of your stage. This is an arbitrary string and must contain
+  only alphanumeric characters, plus `-` and `_`.
+- `type`: the type of stage being specified. Can only be of the types specified
+  below
+
+### Docker build stage type
+The `docker-build` stage type builds a Docker image from a specified (or
+unspecified) `Dockerfile`. This stage does not push any images, it just builds
+them for pushing in a later stage.
+
+Additional fields:
+- `build_dir`: optional. The directory from which the `docker build` command
+  will run. The same as when one uses `docker build .` or `docker build ./src`
+  from the command line. If left out, it is assumed that the build context is to
+  be the root level of the Git repository (`.`).
+- `dockerfile`: optional. The `Dockerfile` from which to build. Note that while
+  it is best practise to have your `Dockerfile` at the same level as the build
+  context, this is not required. Defaults to `./Dockerfile`.
+
+Here is an example of a very simple docker build stage, which takes a docker
+file named `Dockerfile` and builds from the root level of the Git repo:
+```
+- name: mybuildstage
+  type: docker-build
+```
+
+Next is a more complex example which builds from the `src` directory using a
+Docker file in the same directory:
+```
+- name: mybuildstage
+  type: docker-build
+  build_dir: ./src
+  dockerfile: ./src/Dockerfile
+```
+
+### Docker push stage type
+The `docker-push` stage type pushes a Docker image which was built in a previous
+stage.
+
+
 [1]: dev/example-dashboard.png
 [2]: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
