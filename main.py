@@ -41,7 +41,7 @@ def load_pipelines(pipelines=None):
     print('initializing pipeline state...')
 
     with open(args['--config-file'], 'r') as stream:
-        config_file = yaml.load(stream.read())
+        config_file = yaml.load(stream.read(), Loader=yaml.FullLoader)
     config_file = config_file['pipelines']
 
     for name in config_file:

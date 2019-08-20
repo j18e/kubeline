@@ -132,7 +132,7 @@ spec:
           {%- else %}
             {%- set docker_image = '' %}
             {%- for cmd in stage.commands %}
-            {{ cmd }}
+            {{ cmd | indent(12) }}
             {%- endfor %}
           {%- endif %}
           ) >> {{ log_file }} 2>&1

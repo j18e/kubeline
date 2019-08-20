@@ -78,7 +78,7 @@ def get_pipeline_spec(config, commit=None):
         rmtree(repo_path)
         return None, commit, f'did not find {file_name} in {url}'
     with open(path, 'r') as stream:
-        config = yaml.load(stream.read())
+        config = yaml.load(stream.read(), Loader=yaml.FullLoader)
     rmtree(repo_path)
     config, err = validate_pipeline_spec(config)
     if err:

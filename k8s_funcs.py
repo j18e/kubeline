@@ -23,7 +23,7 @@ def Build(args, pipeline, config, commit, kubeline_yaml, namespace):
         'git_key_secret': args['--git-key-secret']
     }
     body = template.render(build_spec)
-    body = yaml.load(body)
+    body = yaml.load(body, Loader=yaml.FullLoader)
     load_config()
     batch = client.BatchV1Api()
     if 'docker_secret' in config:

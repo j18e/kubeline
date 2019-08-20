@@ -16,9 +16,9 @@ pipelines:
     docker_secret: kubeline-docker-j18e
     # env_from_secret: some-secret
     ##
-    ## if git_branch is not specified, master is assumed
+    ## if branch is not specified, master is assumed
     ##
-    # git_branch: master
+    # branch: master
 #
 # all other configuration in target repo /kubeline.yml
 #
