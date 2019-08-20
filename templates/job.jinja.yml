@@ -94,7 +94,9 @@ spec:
         {%- set stage_id = '{}-{}'.format(loop.index, stage.name) %}
         {%- set log_file = '{}/{}'.format(log_dir, stage_id) %}
       - name: {{ stage_id | replace("_","-") }}
-        {%- if stage.type == ( 'docker-build' or 'docker-push' ) %}
+        {%- if stage.type == 'docker-build' %}
+        image: alpine:3.9
+        {%- elif stage.type == 'docker-push' %}
         image: alpine:3.9
         {%- elif stage.type == 'docker-compose' %}
         image: docker/compose:1.24.0
@@ -149,7 +151,13 @@ spec:
           value: "{{ commit }}"
         - name: KUBELINE_GIT_COMMIT_SHORT
           value: "{{ short_commit }}"
-        {%- if stage.type == ( 'docker-build' or 'docker-push' or 'docker-compose' ) %}
+        {%- if stage.type == 'docker-build' %}
+        - name: KUBELINE_DOCKER_IMAGE
+          value: "{{ docker_image }}"
+        {%- elif stage.type == 'docker-push' %}
+        - name: KUBELINE_DOCKER_IMAGE
+          value: "{{ docker_image }}"
+        {%- elif stage.type == 'docker-compose' %}
         - name: KUBELINE_DOCKER_IMAGE
           value: "{{ docker_image }}"
         {%- endif %}
@@ -163,7 +171,29 @@ spec:
           mountPath: {{ work_dir }}
         - name: logs
           mountPath: {{ log_dir }}
-        {%- if stage.type == ( 'docker-build' or 'docker-push' or 'docker-compose' ) %}
+        {%- if stage.type == 'docker-build' %}
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: docker-binary
+          mountPath: /usr/bin/docker
+          {%- if 'docker_secret' in config %}
+        - name: docker-creds
+          mountPath: /root/.docker/config.json
+          subPath: .dockerconfigjson
+          {%- endif %}
+        {%- endif %}
+        {%- if stage.type == 'docker-push' %}
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: docker-binary
+          mountPath: /usr/bin/docker
+          {%- if 'docker_secret' in config %}
+        - name: docker-creds
+          mountPath: /root/.docker/config.json
+          subPath: .dockerconfigjson
+          {%- endif %}
+        {%- endif %}
+        {%- if stage.type == 'docker-compose' %}
         - name: docker-socket
           mountPath: /var/run/docker.sock
         - name: docker-binary
