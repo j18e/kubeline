@@ -31,6 +31,11 @@ def Build(args, pipeline, config, commit, kubeline_yaml, namespace):
             secret_type='kubernetes.io/dockerconfigjson')
         if err:
             return None, err
+    if 'env_from_secret' in config:
+        secret, err = get_secret(config['env_from_secret'], namespace,
+            secret_type='Opaque')
+        if err:
+            return None, err
     resp = batch.create_namespaced_job(namespace, body)
     return resp, None
 

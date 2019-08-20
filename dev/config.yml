@@ -14,6 +14,7 @@ pipelines:
   ifail:
     git_url: https://github.com/j18e/ci-test-3.git
     docker_secret: kubeline-docker-j18e
+    # env_from_secret: some-secret
     ##
     ## if git_branch is not specified, master is assumed
     ##

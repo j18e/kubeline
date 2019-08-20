@@ -145,6 +145,11 @@ spec:
           value: "{{ commit }}"
         - name: KUBELINE_GIT_COMMIT_SHORT
           value: "{{ short_commit }}"
+        {%- if 'env_from_secret' in config %}
+        envFrom:
+        - secretRef:
+            name: {{ config.env_from_secret }}
+        {%- endif %}
         {%- if stage.type == 'docker-build' or 'docker-push' or 'docker-compose' %}
         - name: KUBELINE_DOCKER_IMAGE
           value: "{{ docker_image }}"
