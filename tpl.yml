@@ -1,0 +1,32 @@
+{{- $workDir := "/kubeline/work" -}}
+{{- $logDir := "/kubeline/logs" -}}
+{{- $varsFile := printf "%s/vars.sh" $logDir -}}
+
+{{- define "labels" }}
+app: kubeline
+type: job
+pipeline: {{ .Name }}
+{{- end -}}
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: "mypipe-"
+  labels:
+spec:
+  backoffLimit: 0
+  completions: 1
+  template:
+    metadata:
+      labels:
+        {{ template "labels" }}
+    spec:
+      activeDeadlineSeconds: 4000
+      restartPolicy: Never
+      containers:
+      {{- range .Stages }}
+      - name: {{ .Name }}
+        image: alpine:3.9
+        workdir: {{ $workDir }}
+        me: you
+      {{- end }}

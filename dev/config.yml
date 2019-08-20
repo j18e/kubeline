@@ -1,18 +1,21 @@
 pipelines:
-  kubeline:
+  - name: kubeline
     git_url: git@github.com:j18e/kubeline.git
     docker_secret: kubeline-docker-j18e
-  public-ssh:
+  - name: public-ssh
     git_url: git@github.com:j18e/ci-test-1.git
     docker_secret: kubeline-docker-j18e
-  ifailcheck:
+  - name: ifailcheck
     git_url: https://github.com/j18e/ci-test-wejfiowejf1.git
     docker_secret: kubeline-docker-j18e
-  ifailconfig:
+  - name: ifailconfig
     git_url: https://github.com/j18e/ci-test-2.git
     docker_secret: kubeline-docker-j18e
-  ifail:
+  - name: ifail
     git_url: https://github.com/j18e/ci-test-3.git
+    docker_secret: kubeline-docker-j18e
+  - name: ipass
+    git_url: https://github.com/j18e/ci-test-1.git
     docker_secret: kubeline-docker-j18e
     ##
     ## if git_branch is not specified, master is assumed
