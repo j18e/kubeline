@@ -94,7 +94,7 @@ spec:
         {%- set stage_id = '{}-{}'.format(loop.index, stage.name) %}
         {%- set log_file = '{}/{}'.format(log_dir, stage_id) %}
       - name: {{ stage_id | replace("_","-") }}
-        {%- if stage.type == 'docker-build' or 'docker-push'%}
+        {%- if stage.type == ( 'docker-build' or 'docker-push' ) %}
         image: alpine:3.9
         {%- elif stage.type == 'docker-compose' %}
         image: docker/compose:1.24.0
