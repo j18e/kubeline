@@ -102,7 +102,11 @@ spec:
         image: {{ stage.image }}
         {%- endif %}
         workingDir: {{ work_dir }}
+        {%- if stage.type == 'custom' %}
+        command: [bash]
+        {%- else %}
         command: [sh]
+        {%- endif %}
         args:
         - -ceux
         - |
@@ -145,7 +149,7 @@ spec:
           value: "{{ commit }}"
         - name: KUBELINE_GIT_COMMIT_SHORT
           value: "{{ short_commit }}"
-        {%- if stage.type == 'docker-build' or 'docker-push' or 'docker-compose' %}
+        {%- if stage.type == ( 'docker-build' or 'docker-push' or 'docker-compose' ) %}
         - name: KUBELINE_DOCKER_IMAGE
           value: "{{ docker_image }}"
         {%- endif %}
@@ -159,7 +163,7 @@ spec:
           mountPath: {{ work_dir }}
         - name: logs
           mountPath: {{ log_dir }}
-        {%- if stage.type == 'docker-build' or 'docker-push' or 'docker-compose' %}
+        {%- if stage.type == ( 'docker-build' or 'docker-push' or 'docker-compose' ) %}
         - name: docker-socket
           mountPath: /var/run/docker.sock
         - name: docker-binary
