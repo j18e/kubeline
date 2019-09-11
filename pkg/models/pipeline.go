@@ -6,17 +6,15 @@ import (
 )
 
 type KubelineYAML struct {
-	Stages      []Stage `yaml:"stages"`
-	Commit      string  `yaml:"-"`
-	ShortCommit string  `yaml:"-"`
+	Stages []*Stage `yaml:"stages"`
 }
 
-func (p *KubelineYAML) Validate() error {
-	if len(p.Stages) == 0 {
+func (ky *KubelineYAML) Validate() error {
+	if len(ky.Stages) < 1 {
 		return errors.New("pipeline must contain at least one stage")
 	}
 
-	for i, s := range p.Stages {
+	for i, s := range ky.Stages {
 		err := s.Validate()
 		if err != nil {
 			return fmt.Errorf("stage %d: %v", i+1, s)
