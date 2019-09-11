@@ -1,6 +1,6 @@
 package jobs
 
-var TplStr = `{{- $workDir := "/kubeline-work" -}}
+var tplStr = `{{- $workDir := "/kubeline-work" -}}
 {{- $logDir := "/kubeline-logs" -}}
 {{- $logFile := printf "%s/$KUBELINE_STAGE_NAME" $logDir -}}
 {{- $varsFile := printf "%s/vars.sh" $logDir -}}

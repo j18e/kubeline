@@ -1,63 +1,83 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"log"
-	"os"
-	"text/template"
 
-	"github.com/Masterminds/sprig"
+	"github.com/j18e/kubeline/pkg/config"
 	"github.com/j18e/kubeline/pkg/jobs"
 	"github.com/j18e/kubeline/pkg/repos"
+	log "github.com/sirupsen/logrus"
 )
 
-func fail(s string) {
-	fmt.Fprintln(os.Stderr, "FAILURE - "+s)
-	os.Exit(1)
-}
-
 func main() {
-	config, repos, err := getConfig()
+	conf, err := config.LoadConfig()
 	if err != nil {
-		fail(err.Error())
+		log.Fatalf("loading config: %v", err)
 	}
 
-	triggerJob(config, repos[0])
+	// handle command
+	switch conf.Command {
+	case config.TEMPLATE:
+		n := flag.Arg(1)
+		if n == "" {
+			log.Fatal("no repo name provided")
+		}
+		runTemplate(conf, n)
+	}
 }
 
-func triggerJob(config Config, repo repos.Repo) {
-	tpl, err := template.New("job").Funcs(sprig.TxtFuncMap()).Parse(jobs.TplStr)
-	if err != nil {
-		log.Fatalf("templating job: %v", err)
-	}
-
-	ky, err := repo.GetKubelineYAML()
-	if err != nil {
-		log.Fatalf("getting kubeline.yml: %v", err)
-	}
-
-	if err := ky.Validate(); err != nil {
-		log.Fatalf("validating kubeline.yml: %v", err)
-	}
-
-	parms := jobs.JobParameters{
-		Name:              repo.Name,
-		Stages:            ky.Stages,
-		KubelineIteration: 7,
-		GitURL:            repo.URL,
-		GitBranch:         repo.BranchRef.Name().Short(),
-		GitCommit:         repo.BranchRef.Hash().String(),
-		GitKeySecretName:  config.GitKeySecretName,
-		GitKeySecretKey:   config.GitKeySecretKey,
-		JobRunnerImage:    config.JobRunnerImage,
-		InfluxdbHost:      config.InfluxdbHost,
-		InfluxdbDB:        config.InfluxdbDB,
-		Namespace:         config.Namespace,
-		DockerSecret:      repo.DockerSecret,
-	}
-
-	err = tpl.Execute(os.Stdout, parms)
+func runTemplate(conf config.Config, name string) {
+	// get the repo from the config
+	rc, err := conf.GetRepo(name)
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Infof("rendering template of repo %s", rc.Name)
+
+	// open/clone repo
+	repo, err := repos.NewRepo(rc, conf.ReposDir, conf.PrivateKeyBytes)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// pull latest changes
+	if err := repo.Pull(); err != nil {
+		log.Fatalf("pulling repo: %v", err)
+	}
+
+	// render the template
+	rendered, err := jobs.RenderJob(repo, conf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(*rendered)
 }
+
+// func getConfig() (Config, []repopkg.Repo, error) {
+// 	log.Infof("initializing %d repos from config...", len(config.Repos))
+// 	repoNames := make(map[string]bool)
+//
+// 	for _, repoCfg := range config.Repos {
+// 		// make sure all repo names are unique
+// 		if repoNames[repoCfg.Name] {
+// 			return config, repos, fmt.Errorf("repo named %s appears multiple times in config", repoCfg.Name)
+// 		}
+//
+// 		repoCfg.ParentDir = config.ReposDir
+//
+// 		// init and clone the repo
+// 		repo, err := repopkg.NewRepo(repoCfg, config.GitKeyBytes)
+// 		if err != nil {
+// 			log.Errorf("init repo %s: %v", repoCfg.Name, err)
+// 			continue
+// 		}
+//
+// 		// add to the results
+// 		repos = append(repos, repo)
+// 		repoNames[repoCfg.Name] = true
+// 	}
+// 	log.Infof("%d/%d repos successfully initialized", len(repos), len(config.Repos))
+//
+// 	return config, repos, nil
+// }
