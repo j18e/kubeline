@@ -1,5 +1,4 @@
-git_key_secret_name: kubeline-git-key
-git_key_secret_key: id_rsa
+git_secret_name: kubeline-git-key
 influxdb_host: influxdb
 influxdb_db: kubeline
 job_runner_image: j18e/job-runner:0.1.6

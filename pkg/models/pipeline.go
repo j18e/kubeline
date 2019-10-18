@@ -6,7 +6,7 @@ import (
 )
 
 type KubelineYAML struct {
-	Stages []*Stage `yaml:"stages"`
+	Stages []*Stage `json:"stages"`
 }
 
 func (ky *KubelineYAML) Validate() error {
@@ -14,10 +14,10 @@ func (ky *KubelineYAML) Validate() error {
 		return errors.New("pipeline must contain at least one stage")
 	}
 
-	for i, s := range ky.Stages {
+	for _, s := range ky.Stages {
 		err := s.Validate()
 		if err != nil {
-			return fmt.Errorf("stage %d: %v", i+1, s)
+			return fmt.Errorf("stage %s: %v", s.Name, err)
 		}
 	}
 

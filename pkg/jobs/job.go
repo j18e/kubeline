@@ -28,21 +28,20 @@ type JobParameters struct {
 	Namespace         string
 }
 
-func RenderJob(repo repos.Repo, conf config.Config) (*string, error) {
-	str := ""
-
+func RenderJob(repo *repos.Repo, conf config.Config) (*[]byte, error) {
+	var bx []byte
 	tpl, err := template.New("job").Funcs(sprig.TxtFuncMap()).Parse(tplStr)
 	if err != nil {
-		return &str, fmt.Errorf("creating template: %v", err)
+		return &bx, fmt.Errorf("creating template: %v", err)
 	}
 
 	ky, err := repo.GetKubelineYAML()
 	if err != nil {
-		return &str, fmt.Errorf("getting kubeline.yml: %v", err)
+		return &bx, fmt.Errorf("getting kubeline.yml: %v", err)
 	}
 
 	if err := ky.Validate(); err != nil {
-		return &str, fmt.Errorf("validating kubeline.yml: %v", err)
+		return &bx, fmt.Errorf("validating kubeline.yml: %v", err)
 	}
 
 	parms := JobParameters{
@@ -53,20 +52,20 @@ func RenderJob(repo repos.Repo, conf config.Config) (*string, error) {
 		GitBranch:         repo.BranchRef.Name().Short(),
 		GitCommit:         repo.BranchRef.Hash().String(),
 		DockerSecret:      repo.DockerSecret,
-		GitKeySecretName:  conf.GitKeySecretName,
-		GitKeySecretKey:   conf.GitKeySecretKey,
+		GitKeySecretName:  conf.GitSecret,
+		GitKeySecretKey:   config.GitSecretKey,
 		JobRunnerImage:    conf.JobRunnerImage,
 		InfluxdbHost:      conf.InfluxdbHost,
 		InfluxdbDB:        conf.InfluxdbDB,
-		Namespace:         conf.Namespace,
+		Namespace:         conf.Client.Namespace,
 	}
 
 	// execute the template
 	buf := new(bytes.Buffer)
 	if err = tpl.Execute(buf, parms); err != nil {
-		return &str, err
+		return &bx, err
 	}
-	str = buf.String()
+	bx = buf.Bytes()
 
-	return &str, nil
+	return &bx, nil
 }

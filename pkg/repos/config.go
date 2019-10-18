@@ -10,10 +10,10 @@ import (
 const DefaultBranchName = "master"
 
 type RepoConfig struct {
-	Name         string `yaml:"name"`
-	URL          string `yaml:"git_url"`
-	Branch       string `yaml:"git_branch"`
-	DockerSecret string `yaml:"docker_secret"`
+	Name         string `json:"name"`
+	URL          string `json:"git_url"`
+	Branch       string `json:"git_branch"`
+	DockerSecret string `json:"docker_secret"`
 }
 
 func (rc *RepoConfig) Validate() error {

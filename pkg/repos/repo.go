@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/ghodss/yaml"
 	"github.com/j18e/kubeline/pkg/models"
 	"github.com/prometheus/common/log"
 	git "gopkg.in/src-d/go-git.v4"
@@ -14,7 +15,6 @@ import (
 	"gopkg.in/src-d/go-git.v4/plumbing/transport"
 	"gopkg.in/src-d/go-git.v4/plumbing/transport/ssh"
 	"gopkg.in/src-d/go-git.v4/storage/memory"
-	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -33,8 +33,19 @@ type Repo struct {
 	worktree     *git.Worktree
 }
 
-func NewRepo(config *RepoConfig, dir string, privKey *[]byte) (Repo, error) {
-	repo := Repo{
+type RepoList []*Repo
+
+func (rx RepoList) Get(name string) (*Repo, error) {
+	for _, r := range rx {
+		if r.Name == name {
+			return r, nil
+		}
+	}
+	return &Repo{}, fmt.Errorf("repo %s not found", name)
+}
+
+func NewRepo(config *RepoConfig, dir string, privKey *[]byte) (*Repo, error) {
+	repo := &Repo{
 		Name:         config.Name,
 		Path:         dir + "/" + config.Name,
 		URL:          config.URL,
@@ -106,6 +117,7 @@ func (repo *Repo) Pull() error {
 	} else if err != nil {
 		return err
 	}
+	log.Infof("pulled latest on %s/%s", repo.Name, repo.BranchRef.Name().Short())
 	return nil
 }
 
@@ -113,7 +125,7 @@ func (repo *Repo) clone() error {
 	log.Infof("cleaning path %s for repo %s...", repo.Path, repo.Name)
 	os.RemoveAll(repo.Path)
 
-	gitRepo, err := git.PlainClone(repo.Path, false,
+	r, err := git.PlainClone(repo.Path, false,
 		&git.CloneOptions{
 			URL:               repo.URL,
 			Auth:              repo.auth,
@@ -124,7 +136,12 @@ func (repo *Repo) clone() error {
 		os.RemoveAll(repo.Path)
 		return err
 	}
-	repo.repo = gitRepo
+	repo.repo = r
+	wt, err := repo.repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("getting worktree: %v", err)
+	}
+	repo.worktree = wt
 	return nil
 }
 

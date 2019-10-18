@@ -6,21 +6,21 @@ import (
 )
 
 type Stage struct {
-	Type string `yaml:"type"`
-	Name string `yaml:"name"`
+	Type string `json:"type"`
+	Name string `json:"name"`
 
 	// Docker build
-	BuildDir   string `yaml:"build_dir"`
-	Dockerfile string `yaml:"dockerfile"`
+	BuildDir   string `json:"build_dir"`
+	Dockerfile string `json:"dockerfile"`
 
 	// Docker Push
-	FromStage string   `yaml:"from_stage"`
-	Repo      string   `yaml:"repo"`
-	Tags      []string `yaml:"tags"`
+	FromStage string   `json:"from_stage"`
+	Repo      string   `json:"repo"`
+	Tags      []string `json:"tags"`
 
 	// Custom
-	Image    string   `yaml:"image"`
-	Commands []string `yaml:"commands"`
+	Image    string   `json:"image"`
+	Commands []string `json:"commands"`
 }
 
 func (s *Stage) Validate() error {
